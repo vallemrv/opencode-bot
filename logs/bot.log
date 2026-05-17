@@ -1,0 +1,1849 @@
+2026-04-12 02:46:58,674 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-04-12 02:46:58,741 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-04-12 02:46:58,889 - opencode_server - INFO - Workspace cargado desde config: /home/valle/Documentos/proyectos/criptoapp
+2026-04-12 02:46:58,890 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 13001 (workspace: criptoapp)...
+2026-04-12 02:46:58,890 - opencode_server - INFO - Arrancando opencode serve en puerto 13001 (workspace: criptoapp)...
+2026-04-12 02:47:00,893 - opencode_server - INFO - ✅ Server listo
+2026-04-12 02:47:00,989 - __main__ - WARNING - Intento 1: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-12 02:47:01,493 - __main__ - WARNING - Intento 2: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-12 02:47:02,505 - __main__ - WARNING - Intento 3: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-12 02:47:02,506 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_28627f832ffesiLh, se creará una nueva en /new
+2026-04-12 02:47:02,506 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-04-12 02:47:02,600 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'new', 'models', 'sesiones', 'rename', 'web', 'workspace']
+2026-04-20 07:30:25,847 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-04-20 07:30:25,916 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-04-20 07:30:25,922 - telegram.ext - ERROR - Network Retry Loop (Bootstrap Initialize Application): Failed run number 0 of 0. Aborting.
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 136, in do_action
+    await action_cb()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_application.py", line 489, in initialize
+    await self.bot.initialize()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 316, in initialize
+    await super().initialize()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 857, in initialize
+    await self.get_me()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 2008, in get_me
+    return await super().get_me(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 990, in get_me
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-20 07:30:36,514 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-04-20 07:30:36,552 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-04-20 07:30:36,697 - opencode_server - INFO - Workspace cargado desde config: /home/valle/Documentos/proyectos/criptoapp
+2026-04-20 07:30:36,697 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 13001 (workspace: criptoapp)...
+2026-04-20 07:30:36,697 - opencode_server - INFO - Arrancando opencode serve en puerto 13001 (workspace: criptoapp)...
+2026-04-20 07:30:37,699 - opencode_server - INFO - ✅ Server listo
+2026-04-20 07:30:37,769 - __main__ - WARNING - Intento 1: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-20 07:30:38,274 - __main__ - WARNING - Intento 2: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-20 07:30:39,278 - __main__ - WARNING - Intento 3: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-20 07:30:39,278 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_28627f832ffesiLh, se creará una nueva en /new
+2026-04-20 07:30:39,278 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-04-20 07:30:39,402 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'new', 'models', 'sesiones', 'rename', 'web', 'workspace']
+2026-04-22 21:00:17,030 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-04-22 21:00:17,088 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-04-22 21:00:17,094 - telegram.ext - ERROR - Network Retry Loop (Bootstrap Initialize Application): Failed run number 0 of 0. Aborting.
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 136, in do_action
+    await action_cb()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_application.py", line 489, in initialize
+    await self.bot.initialize()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 316, in initialize
+    await super().initialize()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 857, in initialize
+    await self.get_me()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 2008, in get_me
+    return await super().get_me(
+           ^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 990, in get_me
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-22 21:00:27,719 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-04-22 21:00:27,757 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-04-22 21:00:27,885 - opencode_server - INFO - Workspace cargado desde config: /home/valle/Documentos/proyectos/criptoapp
+2026-04-22 21:00:27,885 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 13001 (workspace: criptoapp)...
+2026-04-22 21:00:27,885 - opencode_server - INFO - Arrancando opencode serve en puerto 13001 (workspace: criptoapp)...
+2026-04-22 21:00:28,887 - opencode_server - INFO - ✅ Server listo
+2026-04-22 21:00:28,953 - __main__ - WARNING - Intento 1: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-22 21:00:29,458 - __main__ - WARNING - Intento 2: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-22 21:00:30,463 - __main__ - WARNING - Intento 3: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-04-22 21:00:30,463 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_28627f832ffesiLh, se creará una nueva en /new
+2026-04-22 21:00:30,463 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-04-22 21:00:30,546 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'new', 'models', 'sesiones', 'rename', 'web', 'workspace']
+2026-04-23 00:31:50,010 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:31:51,015 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:31:52,518 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:31:54,772 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:31:58,153 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:32:03,223 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:32:10,828 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-04-23 00:32:22,222 - __main__ - ERROR - Error: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        pool_request.request
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 101, in handle_async_request
+    raise exc
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 78, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 124, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 113, in connect_tcp
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 279, in do_request
+    res = await self._client.request(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_utils/networkloop.py", line 154, in do_action
+    action_cb_task.result()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 4865, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_baserequest.py", line 305, in _request_wrapper
+    code, payload = await self.do_request(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/request/_httpxrequest.py", line 303, in do_request
+    raise NetworkError(f"httpx.{err.__class__.__name__}: {err}") from err
+telegram.error.NetworkError: httpx.ConnectError: [Errno -3] Temporary failure in name resolution
+2026-05-17 17:31:06,001 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:31:06,001 - project_manager - INFO - No projects.json found, starting fresh
+2026-05-17 17:31:06,045 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:31:06,199 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:31:06,200 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:31:06,200 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:31:06,200 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:31:06,200 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 13001 (workspace: config_system_tmp)...
+2026-05-17 17:31:06,200 - opencode_server - INFO - Arrancando opencode serve en puerto 13001 (workspace: config_system_tmp)...
+2026-05-17 17:31:07,202 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:31:07,269 - __main__ - WARNING - Intento 1: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:31:07,775 - __main__ - WARNING - Intento 2: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:31:08,781 - __main__ - WARNING - Intento 3: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:13001/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:31:08,781 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_28627f832ffesiLh, se creará una nueva en /proyectos
+2026-05-17 17:31:08,782 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:31:08,832 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'proyectos', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:34:35,721 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:34:35,721 - project_manager - INFO - No projects.json found, starting fresh
+2026-05-17 17:34:35,756 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:34:35,898 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:34:35,903 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:34:35,904 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:34:35,904 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:34:35,904 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:34:35,904 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:34:36,906 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:34:36,959 - __main__ - WARNING - Intento 1: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:34:37,470 - __main__ - WARNING - Intento 2: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:34:38,477 - __main__ - WARNING - Intento 3: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:34:38,477 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_28627f832ffesiLh, se creará una nueva en /proyectos
+2026-05-17 17:34:38,477 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:34:38,538 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'proyectos', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:35:23,377 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:35:23,377 - project_manager - INFO - No projects.json found, starting fresh
+2026-05-17 17:35:23,412 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:35:23,542 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:35:23,543 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:35:23,543 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:35:23,543 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:35:23,543 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:35:23,544 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:35:24,545 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:35:24,601 - __main__ - WARNING - Intento 1: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:35:25,107 - __main__ - WARNING - Intento 2: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:35:26,119 - __main__ - WARNING - Intento 3: Sesión inválida ses_28627f832ffesiLh: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_28627f832ffesiLhqIqd03nlos'
+2026-05-17 17:35:26,119 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_28627f832ffesiLh, se creará una nueva en /proyectos
+2026-05-17 17:35:26,119 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:35:26,171 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:37:33,619 - __main__ - INFO - Mensaje: Hola
+2026-05-17 17:37:33,628 - __main__ - WARNING - Sesión ses_28627f832ffesiLhqIqd03nlos no existe, creando nueva
+2026-05-17 17:37:33,639 - project_manager - INFO - Created project default: default @ /home/valle/Documentos/proyectos/criptoapp
+2026-05-17 17:37:33,639 - project_manager - INFO - Active project set to: default
+2026-05-17 17:37:33,639 - project_manager - INFO - Added session ses_1c96a1b40ff to project default
+2026-05-17 17:37:33,834 - opencode_client - INFO - [SSE:ses_1c96] Conectando a http://10.0.0.8:4096/event
+2026-05-17 17:37:33,838 - opencode_client - INFO - [SSE:ses_1c96] ✅ Conectado (status 200)
+2026-05-17 17:37:33,838 - opencode_client - INFO - [SSE:ses_1c96] Primer chunk recibido
+2026-05-17 17:37:33,838 - __main__ - INFO - Enviando mensaje a sesión ses_1c96a1b40ffeXWZL... (modelo: alibaba-coding-plan/kimi-k2.5)
+2026-05-17 17:37:33,966 - opencode_client - INFO - [SSE:ses_1c96] Status: busy
+2026-05-17 17:37:34,648 - opencode_client - INFO - [SSE:ses_1c96] Status: busy
+2026-05-17 17:37:41,849 - __main__ - INFO - [Heartbeat] Reasoning received: The user said "Hola" which is Spanish for "Hello". This is a simple greeting. According to my instru...
+2026-05-17 17:37:42,051 - opencode_client - INFO - [SSE:ses_1c96] Status: busy
+2026-05-17 17:37:42,051 - opencode_client - INFO - [SSE:ses_1c96] Status: idle
+2026-05-17 17:37:42,052 - __main__ - INFO - [Resumen] part_order: 5 parts, part_types: ['text', 'step-start', 'reasoning', 'text', 'step-finish']
+2026-05-17 17:37:42,052 - __main__ - INFO - [Resumen] part_buffers keys: ['prt_e3695e5a9001b6B1gKxc316d3V', 'prt_e3696008e001b1biE7tO5RNvWC', 'prt_e369604d2001VsPMHS3Wb0yBv3']
+2026-05-17 17:37:42,052 - __main__ - INFO - [Resumen] sse_text length: 34
+2026-05-17 17:37:42,052 - opencode_client - INFO - [SSE:ses_1c96] Cancelado por usuario
+2026-05-17 17:37:42,053 - opencode_client - INFO - [SSE:ses_1c96] 📊 Resumen: 52 eventos, 0 chars en 8.22s
+2026-05-17 17:41:33,415 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:41:33,415 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:41:33,449 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:41:33,591 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:41:33,596 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:41:33,597 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:41:33,597 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:41:33,597 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:41:33,598 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:41:34,601 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:41:34,697 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:41:34,697 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:41:34,745 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:41:40,324 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:41:40,324 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:41:40,358 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:41:40,499 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:41:40,504 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:41:40,504 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:41:40,505 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:41:40,505 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:41:40,506 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:41:41,508 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:41:41,585 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:41:41,585 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:41:41,638 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:44:29,036 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:44:29,036 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:44:29,070 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:44:29,198 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:44:29,199 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:44:29,199 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:44:29,199 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:44:29,199 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:44:29,199 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:44:30,201 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:44:30,253 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:44:30,253 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:44:30,300 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:50:08,305 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:50:08,305 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:50:08,342 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:50:08,524 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:50:08,529 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:50:08,529 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:50:08,530 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:50:08,530 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:50:08,531 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:50:09,533 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:50:09,627 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:50:09,628 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:50:09,689 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:54:20,365 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:54:20,365 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:54:20,401 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:54:20,546 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:54:20,547 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:54:20,547 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:54:20,547 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:54:20,547 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:54:20,547 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:54:21,549 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:54:21,602 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:54:21,602 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:54:21,720 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:54:51,325 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:54:51,325 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:54:51,364 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:54:51,519 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:54:51,520 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:54:51,520 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:54:51,520 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:54:51,520 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:54:51,520 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:54:52,521 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:54:52,572 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:54:52,572 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:54:52,655 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 17:55:23,030 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 17:55:23,030 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 17:55:23,067 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 17:55:23,217 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 17:55:23,218 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 17:55:23,218 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 17:55:23,218 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 17:55:23,218 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:55:23,218 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 17:55:24,220 - opencode_server - INFO - ✅ Server listo
+2026-05-17 17:55:24,272 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 17:55:24,272 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 17:55:24,362 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 21:15:42,516 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 21:15:42,516 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 21:15:42,554 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 21:15:42,693 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 21:15:42,698 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 21:15:42,698 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 21:15:42,699 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 21:15:42,699 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:15:42,699 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:15:43,702 - opencode_server - INFO - ✅ Server listo
+2026-05-17 21:15:43,779 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 21:15:43,779 - __main__ - INFO - 🔍 Check restart_pending: {'chat_id': 8317289871, 'message_id': 456}
+2026-05-17 21:15:43,779 - __main__ - INFO - 📩 Restart pendiente detectado! chat_id=8317289871, msg_id=456
+2026-05-17 21:15:43,779 - __main__ - INFO - 📝 Info: model=alibaba-coding-plan/kimi-k2.5, workspace=criptoapp, session=ses_1c96a1b40ffeXWZL
+2026-05-17 21:15:43,779 - __main__ - INFO - ✏️ Editando mensaje 456 en chat 8317289871...
+2026-05-17 21:15:43,900 - __main__ - INFO - ✅ Mensaje editado exitosamente!
+2026-05-17 21:15:43,902 - __main__ - INFO - 🗑️ restart_pending eliminado del config
+2026-05-17 21:15:43,989 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 21:18:24,161 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 21:18:24,161 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 21:18:24,196 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 21:18:24,351 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 21:18:24,356 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 21:18:24,356 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 21:18:24,357 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 21:18:24,357 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:18:24,358 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:18:25,360 - opencode_server - INFO - ✅ Server listo
+2026-05-17 21:18:25,435 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 21:18:25,435 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 21:18:25,492 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 21:20:58,184 - __main__ - INFO - Restart: git pull -> ✅ Pull exitoso
+Ya está actualizado.
+2026-05-17 21:20:58,256 - __main__ - INFO - Restart: build -> ⚠️ pip: /bin/sh: /home/valle/proyectos/opencode-bot/.venv/bin/pip: /home/valle/Documentos/proyectos/
+2026-05-17 21:20:58,346 - __main__ - INFO - Restart: systemctl -> ❌ Restart failed: 
+2026-05-17 21:21:01,941 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 21:21:01,941 - project_manager - INFO - Loaded 1 projects, active: default
+2026-05-17 21:21:01,978 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 21:21:02,097 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 21:21:02,098 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 21:21:02,098 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 21:21:02,098 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 21:21:02,098 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:21:02,098 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:21:03,099 - opencode_server - INFO - ✅ Server listo
+2026-05-17 21:21:03,188 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 21:21:03,188 - __main__ - INFO - 🔍 Check restart_pending: {'chat_id': 8317289871, 'message_id': 458, 'pull_result': '✅ Pull exitoso\nYa está actualizado.', 'build_result': '⚠️ pip: /bin/sh: /home/valle/proyectos/opencode-bot/.venv/bin/pip: /home/valle/Documentos/proyectos/opencode'}
+2026-05-17 21:21:03,188 - __main__ - INFO - 📩 Restart pendiente detectado! chat_id=8317289871, msg_id=458
+2026-05-17 21:21:03,188 - __main__ - INFO - 📝 Info: model=alibaba-coding-plan/kimi-k2.5, workspace=criptoapp, session=ses_1c96a1b40ffeXWZL
+2026-05-17 21:21:03,188 - __main__ - INFO - ✏️ Editando mensaje 458 en chat 8317289871...
+2026-05-17 21:21:03,261 - __main__ - INFO - ✅ Mensaje editado exitosamente!
+2026-05-17 21:21:03,262 - __main__ - INFO - 🗑️ restart_pending eliminado del config
+2026-05-17 21:21:03,328 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 21:21:18,757 - project_manager - INFO - Project default closed
+2026-05-17 21:23:03,863 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 21:23:03,863 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-17 21:23:03,898 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 21:23:04,071 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 21:23:04,073 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 21:23:04,073 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 21:23:04,073 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 21:23:04,073 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:23:04,073 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:23:05,076 - opencode_server - INFO - ✅ Server listo
+2026-05-17 21:23:05,170 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 21:23:05,171 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 21:23:05,246 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 21:34:03,851 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 21:34:03,851 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-17 21:34:03,886 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 21:34:04,025 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 21:34:04,026 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 21:34:04,026 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 21:34:04,026 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 21:34:04,026 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:34:04,026 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 21:34:05,028 - opencode_server - INFO - ✅ Server listo
+2026-05-17 21:34:05,128 - __main__ - INFO - ✅ Sesión válida: ses_1c96a1b40ffeXWZL
+2026-05-17 21:34:05,128 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 21:34:05,179 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 23:54:06,008 - __main__ - INFO - Restart: git pull -> ✅ Pull exitoso
+Ya está actualizado.
+2026-05-17 23:54:06,090 - __main__ - INFO - Restart: build -> ⚠️ pip: /bin/sh: /home/valle/proyectos/opencode-bot/.venv/bin/pip: /home/valle/Documentos/proyectos/
+2026-05-17 23:54:06,182 - __main__ - INFO - Restart: systemctl -> ❌ Restart failed: 
+2026-05-17 23:54:09,793 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 23:54:09,793 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-17 23:54:09,826 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 23:54:09,964 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 23:54:09,969 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 23:54:09,969 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 23:54:09,970 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 23:54:09,970 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 23:54:09,971 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 23:54:10,973 - opencode_server - INFO - ✅ Server listo
+2026-05-17 23:54:11,066 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-17 23:54:11,572 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-17 23:54:12,583 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-17 23:54:12,583 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-17 23:54:12,583 - __main__ - INFO - 🔍 Check restart_pending: {'chat_id': 8317289871, 'message_id': 464, 'pull_result': '✅ Pull exitoso\nYa está actualizado.', 'build_result': '⚠️ pip: /bin/sh: /home/valle/proyectos/opencode-bot/.venv/bin/pip: /home/valle/Documentos/proyectos/opencode'}
+2026-05-17 23:54:12,583 - __main__ - INFO - 📩 Restart pendiente detectado! chat_id=8317289871, msg_id=464
+2026-05-17 23:54:12,583 - __main__ - INFO - 📝 Info: model=alibaba-coding-plan/kimi-k2.5, workspace=criptoapp, session=ses_1c96a1b40ffeXWZL
+2026-05-17 23:54:12,583 - __main__ - INFO - ✏️ Editando mensaje 464 en chat 8317289871...
+2026-05-17 23:54:12,652 - __main__ - INFO - ✅ Mensaje editado exitosamente!
+2026-05-17 23:54:12,653 - __main__ - INFO - 🗑️ restart_pending eliminado del config
+2026-05-17 23:54:12,701 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-17 23:59:33,037 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-17 23:59:33,038 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-17 23:59:33,072 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-17 23:59:33,219 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-17 23:59:33,220 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-17 23:59:33,220 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-17 23:59:33,220 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-17 23:59:33,220 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 23:59:33,220 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-17 23:59:34,222 - opencode_server - INFO - ✅ Server listo
+2026-05-17 23:59:34,279 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-17 23:59:34,787 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-17 23:59:35,794 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-17 23:59:35,794 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-17 23:59:35,794 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-17 23:59:35,846 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 00:16:56,924 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 00:16:56,924 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 00:16:56,960 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 00:16:57,092 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 00:16:57,093 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 00:16:57,093 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 00:16:57,093 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 00:16:57,093 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:16:57,093 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:16:58,095 - opencode_server - INFO - ✅ Server listo
+2026-05-18 00:16:58,167 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:16:58,674 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:16:59,686 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:16:59,686 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 00:16:59,686 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-18 00:16:59,739 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 00:26:42,559 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 00:26:42,559 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 00:26:42,595 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 00:26:42,744 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 00:26:42,745 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 00:26:42,746 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 00:26:42,746 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 00:26:42,746 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:26:42,746 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:26:43,747 - opencode_server - INFO - ✅ Server listo
+2026-05-18 00:26:43,796 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:26:44,308 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:26:45,323 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:26:45,323 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 00:26:45,323 - __main__ - INFO - 🔍 Check restart_pending: {'chat_id': 8317289871, 'message_id': 468, 'pull': '✅ Ya está actualizado.', 'build': '⚠️ pip'}
+2026-05-18 00:26:45,323 - __main__ - INFO - 📩 Restart pendiente: chat=8317289871, msg=468
+2026-05-18 00:26:45,399 - __main__ - INFO - ✅ Restart feedback enviado
+2026-05-18 00:26:45,456 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 00:27:03,305 - __main__ - ERROR - Error: 'OpenCodeClient' object has no attribute 'delete_all_sessions'
+Traceback (most recent call last):
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_application.py", line 1315, in process_update
+    await coroutine
+  File "/home/valle/proyectos/opencode-bot/.venv/lib/python3.14/site-packages/telegram/ext/_handlers/basehandler.py", line 159, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/valle/proyectos/opencode-bot/src/telegram_bot.py", line 1795, in handle_callback
+    await client.delete_all_sessions()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'OpenCodeClient' object has no attribute 'delete_all_sessions'. Did you mean: 'delete_session'?
+2026-05-18 00:30:21,836 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 00:30:21,836 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 00:30:21,871 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 00:30:22,018 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 00:30:22,023 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 00:30:22,024 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 00:30:22,024 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 00:30:22,025 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:30:22,025 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:30:23,028 - opencode_server - INFO - ✅ Server listo
+2026-05-18 00:30:23,094 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:30:23,600 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:30:24,622 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:30:24,623 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 00:30:24,623 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-18 00:30:24,680 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 00:39:11,569 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 00:39:11,569 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 00:39:11,602 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 00:39:11,730 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 00:39:11,735 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 00:39:11,736 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 00:39:11,736 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 00:39:11,736 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:39:11,737 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 00:39:12,738 - opencode_server - INFO - ✅ Server listo
+2026-05-18 00:39:12,825 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:39:13,331 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:39:14,342 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 00:39:14,342 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 00:39:14,342 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-18 00:39:14,394 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 01:28:16,540 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 01:28:16,540 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 01:28:16,575 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 01:28:16,716 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 01:28:16,721 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 01:28:16,721 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 01:28:16,722 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 01:28:16,722 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:28:16,723 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:28:17,726 - opencode_server - INFO - ✅ Server listo
+2026-05-18 01:28:17,836 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:28:18,349 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:28:19,361 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:28:19,361 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 01:28:19,361 - __main__ - INFO - 🔍 Check restart_pending: {'chat_id': 8317289871, 'message_id': 475, 'pull': '✅ Ya está actualizado.', 'build': '⚠️ pip'}
+2026-05-18 01:28:19,361 - __main__ - INFO - 📩 Restart pendiente: chat=8317289871, msg=475
+2026-05-18 01:28:19,428 - __main__ - INFO - ✅ Restart feedback enviado
+2026-05-18 01:28:19,482 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 01:35:18,942 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 01:35:18,942 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 01:35:18,976 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 01:35:19,119 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 01:35:19,124 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 01:35:19,124 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 01:35:19,125 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 01:35:19,125 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:35:19,126 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:35:20,128 - opencode_server - INFO - ✅ Server listo
+2026-05-18 01:35:20,212 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:35:20,718 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:35:21,730 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://10.0.0.8:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:35:21,730 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 01:35:21,730 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-18 01:35:21,788 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 01:38:43,194 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 01:38:43,195 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 01:38:43,231 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 01:38:43,366 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 01:38:43,367 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 01:38:43,367 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 01:38:43,367 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 01:38:43,367 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:38:43,367 - opencode_server - INFO - Arrancando opencode serve en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:38:44,369 - opencode_server - INFO - ✅ Server listo
+2026-05-18 01:38:44,449 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://127.0.0.1:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:38:44,958 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://127.0.0.1:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:38:45,965 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://127.0.0.1:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:38:45,965 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 01:38:45,965 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-18 01:38:46,018 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']
+2026-05-18 01:38:50,578 - __main__ - INFO - 🚀 OpencodeAgent Bot | Admin: 8317289871
+2026-05-18 01:38:50,578 - project_manager - INFO - Loaded 1 projects, active: None
+2026-05-18 01:38:50,613 - __main__ - INFO - ✅ Bot iniciado. Esperando mensajes...
+2026-05-18 01:38:50,762 - bot_server - INFO - Arrancando bot server en puerto 13002...
+2026-05-18 01:38:50,763 - bot_server - INFO - ✅ Bot server listo en puerto 13002
+2026-05-18 01:38:50,763 - __main__ - INFO - 🚀 Bot server iniciado en puerto 13002
+2026-05-18 01:38:50,763 - opencode_server - INFO - Usando workspace por defecto: /home/valle/proyectos/config_system_tmp
+2026-05-18 01:38:50,763 - __main__ - INFO - 🚀 Iniciando OpenCode server en puerto 4096 (workspace: config_system_tmp)...
+2026-05-18 01:38:50,763 - opencode_server - INFO - Server ya está corriendo en puerto 4096
+2026-05-18 01:38:50,770 - __main__ - WARNING - Intento 1: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://127.0.0.1:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:38:51,278 - __main__ - WARNING - Intento 2: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://127.0.0.1:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:38:52,284 - __main__ - WARNING - Intento 3: Sesión inválida ses_1c96a1b40ffeXWZL: 404, message='Not Found', url='http://127.0.0.1:4096/session/ses_1c96a1b40ffeXWZLuMEDz9NQuJ'
+2026-05-18 01:38:52,284 - __main__ - WARNING - ⚠️ Sesión inválida tras 3 intentos: ses_1c96a1b40ffeXWZL, se creará una nueva en /proyectos
+2026-05-18 01:38:52,284 - __main__ - INFO - 🔍 Check restart_pending: None
+2026-05-18 01:38:52,377 - __main__ - INFO - ✅ Comandos registrados: ['start', 'status', 'esc', 'restart', 'open', 'projects', 'close', 'sessions', 'models', 'rename', 'web']

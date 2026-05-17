@@ -1,5 +1,0 @@
-{
-  "default_model": "alibaba-coding-plan/qwen3.5-plus",
-  "project": "criptoapp",
-  "server_port": 13001
-}
