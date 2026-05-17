@@ -6,6 +6,7 @@ opencode_client.py — Cliente HTTP + SSE para OpenCode server
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import time
 from datetime import datetime
@@ -14,7 +15,8 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-OPENCODE_BASE_URL = "http://10.0.0.8:13001"
+OPENCODE_PORT = int(os.getenv("OPENCODE_PORT", "4096"))
+OPENCODE_BASE_URL = f"http://10.0.0.8:{OPENCODE_PORT}"
 SSE_TIMEOUT = aiohttp.ClientTimeout(total=None, connect=10, sock_read=None)
 
 # Global para tracking del último evento SSE
