@@ -200,10 +200,22 @@ for await (const event of events.stream) {
 ## Python Client Implementation
 
 Ver `src/opencode_client.py` para implementación Python:
-- `get_messages()` - Obtener mensajes
-- `create_session()` - Crear sesión
-- `send_message()` - Enviar mensaje
-- `stream_session_events()` - SSE stream
+- `get_session_status(session_id)` - Estado de una sesión (busy/idle)
+- `get_all_session_status()` - Estado de todas las sesiones
+- `is_session_busy(session_id)` - Check si sesión está procesando
+- `get_messages(session_id)` - Obtener mensajes
+- `create_session(title)` - Crear sesión
+- `send_message(session_id, payload)` - Enviar mensaje (blocking)
+- `send_message_async(session_id, payload)` - Enviar mensaje (async, no wait)
+- `abort_session(session_id)` - Cancelar sesión en curso
+- `stream_session_events(session_id)` - SSE stream
+
+## Message Queue
+
+OpenCode maneja internamente la cola de mensajes por sesión:
+- Si sesión está "busy", mensajes se encolan automáticamente
+- No necesitas cola local en el cliente
+- Usa `/session/status` para saber si puedes enviar
 
 ## Referencias
 

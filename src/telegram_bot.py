@@ -130,8 +130,8 @@ class TaskState:
         self.tokens_used: dict = {}  # {input, output, total, cache}
         self.context_percent: float = 0.0
 
-# Cola de mensajes y tareas activas
-_message_queue: asyncio.Queue = asyncio.Queue()
+# Tareas activas - solo para tracking local
+# OpenCode maneja internamente la cola de mensajes por sesión
 _active_tasks: dict[str, TaskState] = {}  # session_id -> TaskState
 
 
@@ -1021,77 +1021,116 @@ async def cmd_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_esc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela la tarea en curso"""
+    """Cancela la tarea en curso usando abort_session() de OpenCode"""
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ Acceso denegado.")
         return
     
-    config = load_config()
-    session_id = config.get("session_id")
+    manager = get_manager()
+    context_info = manager.get_current_context()
     
+    if not context_info:
+        await update.message.reply_text("⚠️ No hay proyecto/sesión activa")
+        return
+    
+    session_id = context_info.get("session_id")
     if not session_id:
         await update.message.reply_text("⚠️ No hay sesión activa")
         return
     
-    task = _active_tasks.get(session_id)
-    if not task:
-        await update.message.reply_text("ℹ️ No hay tareas en progreso")
+    client = get_client()
+    
+    # Check si la sesión está busy usando OpenCode API
+    is_busy = await client.is_session_busy(session_id)
+    
+    if not is_busy:
+        await update.message.reply_text("ℹ️ La sesión no está procesando")
         return
     
-    # Marcar como cancelada
-    task.is_cancelled = True
+    # Abortar usando OpenCode API
+    aborted = await client.abort_session(session_id)
     
-    # Editar mensaje de heartbeat
-    try:
-        await context.bot.edit_message_text(
-            chat_id=task.chat_id,
-            message_id=task.msg_id,
-            text=f"❌ Cancelado por usuario\n⏱️ Duración: {(datetime.now() - task.start_time).total_seconds():.0f}s",
-        )
-    except Exception:
-        pass
+    # Limpiar estado local
+    task = _active_tasks.get(session_id)
+    if task:
+        task.is_cancelled = True
+        
+        try:
+            await context.bot.edit_message_text(
+                chat_id=task.chat_id,
+                message_id=task.msg_id,
+                text=f"❌ Cancelado\n⏱️ {(datetime.now() - task.start_time).total_seconds():.0f}s",
+            )
+        except Exception:
+            pass
+        
+        del _active_tasks[session_id]
     
-    logger.info(f"Tarea cancelada por usuario: {session_id[:20]}")
-    await update.message.reply_text("✅ Tarea cancelada")
+    if aborted:
+        logger.info(f"Sesión abortada: {session_id[:20]}")
+        await update.message.reply_text("✅ Tarea cancelada")
+    else:
+        await update.message.reply_text("⚠️ No se pudo cancelar (ya terminó)")
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el estado de la tarea en curso"""
+    """Muestra el estado de la sesión usando OpenCode API"""
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ Acceso denegado.")
         return
     
-    config = load_config()
-    session_id = config.get("session_id")
+    manager = get_manager()
+    context_info = manager.get_current_context()
     
+    if not context_info:
+        await update.message.reply_text("⚠️ No hay proyecto activo. Usa `/open`")
+        return
+    
+    session_id = context_info.get("session_id")
     if not session_id:
         await update.message.reply_text("⚠️ No hay sesión activa")
         return
     
+    client = get_client()
+    
+    # Obtener estado desde OpenCode
+    status = await client.get_session_status(session_id)
+    is_busy = status.get("type") == "busy"
+    
     task = _active_tasks.get(session_id)
-    if not task:
-        await update.message.reply_text("ℹ️ No hay tareas en progreso")
+    
+    if not is_busy and not task:
+        await update.message.reply_text("✅ Sesión idle (sin tareas)")
         return
     
-    elapsed = (datetime.now() - task.start_time).total_seconds()
+    elapsed = 0
+    if task:
+        elapsed = (datetime.now() - task.start_time).total_seconds()
+    
     mins = int(elapsed // 60)
     
-    status = f"⏳ *Tarea en progreso*\n\n"
-    status += f"⏱️ Duración: {mins} min\n"
-    status += f"📊 Mensajes: {task.message_count}\n"
+    status_text = f"📊 *Estado de sesión*\n\n"
+    status_text += f"📁 Proyecto: {context_info.get('project_name', 'N/A')}\n"
+    status_text += f"🆔 `{session_id[:15]}...`\n"
+    status_text += f"⚡ Status: {'busy' if is_busy else 'idle'}\n"
     
-    if task.files_modified:
-        files = ", ".join(list(task.files_modified)[:10])
-        status += f"📁 Archivos: {files}\n"
+    if task:
+        status_text += f"⏱️ Duración: {mins} min\n"
+        status_text += f"📊 Mensajes: {task.message_count}\n"
+        status_text += f"📈 Context: {task.context_percent:.0f}%\n"
+        
+        if task.files_modified:
+            files = ", ".join(list(task.files_modified)[:5])
+            status_text += f"📁 Archivos: {files}\n"
+        
+        if task.tools_used:
+            tools = ", ".join(f"{k}" for k, v in list(task.tools_used.items())[:3])
+            status_text += f"🔧 Tools: {tools}\n"
+        
+        if task.last_thought:
+            status_text += f"\n💬 {task.last_thought[:100]}"
     
-    if task.tools_used:
-        tools = ", ".join(f"{k}:{v}" for k, v in task.tools_used.items())
-        status += f"🔧 Tools: {tools}\n"
-    
-    if task.last_thought:
-        status += f"\n💬 {task.last_thought[:200]}"
-    
-    await update.message.reply_text(status, parse_mode="Markdown")
+    await update.message.reply_text(status_text, parse_mode="Markdown")
 
 
 async def cmd_rename(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1237,15 +1276,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     config = load_config()
     session_id = config.get("session_id")
-    if session_id and session_id in _active_tasks:
-        task = _active_tasks[session_id]
-        elapsed = int((datetime.now() - task.start_time).total_seconds())
-        mins = elapsed //60
-        await update.message.reply_text(
-            f"⏳ Hay una tarea en curso ({ mins} min)\n"
-            f"Espera a que termine o usa /esc para cancelarla."
-        )
-        return
+    
+    # Verificar si sesión está busy usando OpenCode API
+    if session_id:
+        client = get_client()
+        is_busy = await client.is_session_busy(session_id)
+        
+        if is_busy:
+            task = _active_tasks.get(session_id)
+            elapsed = 0
+            if task:
+                elapsed = int((datetime.now() - task.start_time).total_seconds())
+            mins = elapsed // 60
+            
+            await update.message.reply_text(
+                f"⏳ Sesión ocupada ({mins} min)\n"
+                f"Usa `/esc` para cancelar o espera."
+            )
+            return
 
     await _process_message(context.bot, chat_id, text)
 

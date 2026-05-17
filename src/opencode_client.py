@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
 opencode_client.py — Cliente HTTP + SSE para OpenCode server
+
+Usa la API nativa de OpenCode:
+- /session/status - Obtener estado de sesiones (busy/idle)
+- /session/:id/message - Enviar mensaje (blocking)
+- /session/:id/prompt_async - Enviar mensaje (async, no wait)
+- /session/:id/abort - Cancelar sesión en curso
+- /event - SSE stream para eventos real-time
+
+OpenCode maneja internamente la cola de mensajes por sesión.
 """
 
 import asyncio
@@ -19,21 +28,17 @@ OPENCODE_PORT = int(os.getenv("OPENCODE_PORT", "4096"))
 OPENCODE_BASE_URL = f"http://10.0.0.8:{OPENCODE_PORT}"
 SSE_TIMEOUT = aiohttp.ClientTimeout(total=None, connect=10, sock_read=None)
 
-# Global para tracking del último evento SSE
 _last_sse_event_time: float = 0
 
 def get_last_sse_event_time() -> float:
-    """Retorna el timestamp del último evento SSE recibido"""
     return _last_sse_event_time
 
 def set_last_sse_event_time(timestamp: float):
-    """Actualiza el timestamp del último evento SSE"""
     global _last_sse_event_time
     _last_sse_event_time = timestamp
 
+
 class SSELogger:
-    """Logger especializado para eventos SSE"""
-    
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.event_count = 0
@@ -110,15 +115,14 @@ class OpenCodeClient:
     def __init__(self, base_url: str = OPENCODE_BASE_URL):
         self.base_url = base_url.rstrip("/")
 
-    async def get_messages(self, session_id: str) -> list:
+    async def _get(self, path: str, timeout: float = 10) -> dict:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{self.base_url}/session/{session_id}/message",
-                timeout=aiohttp.ClientTimeout(total=10)
+                f"{self.base_url}{path}",
+                timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
                 resp.raise_for_status()
-                data = await resp.json()
-                return data if isinstance(data, list) else []
+                return await resp.json()
 
     async def _post(self, path: str, payload: dict, timeout: float = 15) -> dict:
         async with aiohttp.ClientSession() as session:
@@ -130,6 +134,16 @@ class OpenCodeClient:
                 resp.raise_for_status()
                 return await resp.json()
     
+    async def _post_no_wait(self, path: str, payload: dict) -> bool:
+        """POST que no espera respuesta (async)"""
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.base_url}{path}",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                return resp.status == 204
+
     async def _patch(self, path: str, payload: dict, timeout: float = 15) -> dict:
         async with aiohttp.ClientSession() as session:
             async with session.patch(
@@ -140,14 +154,25 @@ class OpenCodeClient:
                 resp.raise_for_status()
                 return await resp.json()
 
-    async def _get(self, path: str) -> dict:
+    async def _delete(self, path: str, timeout: float = 10) -> bool:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
+            async with session.delete(
                 f"{self.base_url}{path}",
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
                 resp.raise_for_status()
-                return await resp.json()
+                return True
+
+    async def health_check(self) -> bool:
+        try:
+            await self._get("/global/health")
+            return True
+        except Exception:
+            try:
+                await self._get("/session")
+                return True
+            except Exception:
+                return False
 
     async def list_sessions(self) -> list:
         try:
@@ -157,45 +182,119 @@ class OpenCodeClient:
             logger.error(f"Error listando sesiones: {e}")
             return []
 
-    async def delete_session(self, session_id: str) -> bool:
+    async def get_session_status(self, session_id: str) -> dict:
+        """
+        Obtener estado de una sesión específica.
+        
+        Returns:
+            {"type": "busy"} o {"type": "idle"}
+        """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.delete(
-                    f"{self.base_url}/session/{session_id}",
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    resp.raise_for_status()
-                    return True
+            statuses = await self._get("/session/status")
+            return statuses.get(session_id, {"type": "unknown"})
         except Exception as e:
-            logger.error(f"Error borrando sesión {session_id}: {e}")
-            return False
+            logger.error(f"Error obteniendo status: {e}")
+            return {"type": "unknown"}
 
-    async def delete_all_sessions(self) -> int:
-        sessions = await self.list_sessions()
-        count = 0
-        for s in sessions:
-            sid = s.get("id")
-            if sid:
-                ok = await self.delete_session(sid)
-                if ok:
-                    count += 1
-        return count
+    async def get_all_session_status(self) -> dict:
+        """
+        Obtener estado de todas las sesiones.
+        
+        Returns:
+            {session_id: {"type": "busy"} | {"type": "idle"}}
+        """
+        try:
+            return await self._get("/session/status")
+        except Exception as e:
+            logger.error(f"Error obteniendo statuses: {e}")
+            return {}
 
-    async def create_session(self, title: Optional[str] = None) -> dict:
+    async def is_session_busy(self, session_id: str) -> bool:
+        """Check if session is currently busy (processing)"""
+        status = await self.get_session_status(session_id)
+        return status.get("type") == "busy"
+
+    async def create_session(self, title: Optional[str] = None, model: Optional[str] = None) -> dict:
         payload: dict = {}
         if title:
             payload["title"] = title
         return await self._post("/session", payload)
-    
+
+    async def get_session(self, session_id: str) -> dict:
+        """Obtener detalles de una sesión"""
+        return await self._get(f"/session/{session_id}")
+
+    async def delete_session(self, session_id: str) -> bool:
+        try:
+            return await self._delete(f"/session/{session_id}")
+        except Exception as e:
+            logger.error(f"Error borrando sesión {session_id}: {e}")
+            return False
+
     async def update_session(self, session_id: str, title: str) -> dict:
-        """Actualiza el título de una sesión"""
         payload = {"title": title}
         return await self._patch(f"/session/{session_id}", payload)
 
+    async def abort_session(self, session_id: str) -> bool:
+        """
+        Abortar/cancelar una sesión que está en curso.
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/session/{session_id}/abort",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    return resp.status in [200, 204]
+        except Exception as e:
+            logger.error(f"Error abortando sesión {session_id}: {e}")
+            return False
+
+    async def get_messages(self, session_id: str, limit: int = 0) -> list:
+        """
+        Obtener mensajes de una sesión.
+        
+        Args:
+            session_id: ID de sesión
+            limit: Límite de mensajes (0 = todos)
+        """
+        path = f"/session/{session_id}/message"
+        if limit > 0:
+            path += f"?limit={limit}"
+        
+        try:
+            data = await self._get(path, timeout=15)
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.error(f"Error obteniendo mensajes: {e}")
+            return []
+
     async def send_message(self, session_id: str, payload: dict, timeout: float = 0) -> dict:
-        # timeout=0 significa sin límite (24 horas)
+        """
+        Enviar mensaje y esperar respuesta (blocking).
+        
+        Args:
+            session_id: ID de sesión
+            payload: {parts: [...], model?: {...}}
+            timeout: Timeout en segundos (0 = sin límite, 24h)
+        """
         actual_timeout = 86400 if timeout <= 0 else timeout
         return await self._post(f"/session/{session_id}/message", payload, timeout=actual_timeout)
+
+    async def send_message_async(self, session_id: str, payload: dict) -> bool:
+        """
+        Enviar mensaje sin esperar respuesta (async).
+        
+        El mensaje se encola en OpenCode y se procesa cuando la sesión esté idle.
+        
+        Returns:
+            True si se envió correctamente (204 No Content)
+        """
+        try:
+            return await self._post_no_wait(f"/session/{session_id}/prompt_async", payload)
+        except Exception as e:
+            logger.error(f"Error enviando mensaje async: {e}")
+            return False
 
     async def stream_session_events(
         self,
@@ -203,6 +302,12 @@ class OpenCodeClient:
         ready_event: Optional[asyncio.Event] = None,
         inactivity_timeout: float = 600.0,
     ) -> AsyncGenerator[dict, None]:
+        """
+        Stream de eventos SSE para una sesión.
+        
+        OpenCode envía eventos para TODAS las sesiones en /event.
+        Filtramos por session_id.
+        """
         queue: asyncio.Queue = asyncio.Queue()
         sse_logger = SSELogger(session_id)
         reconnect_count = 0
@@ -219,7 +324,7 @@ class OpenCodeClient:
                 sse_logger.log_event(evt)
                 queue.put_nowait(evt)
 
-        async def _subscribe_with_ready():
+        async def _subscribe():
             nonlocal reconnect_count
             url = f"{self.base_url}/event"
             logger.info(f"[SSE:{session_id[:8]}] Conectando a {url}")
@@ -227,15 +332,13 @@ class OpenCodeClient:
                 async with aiohttp.ClientSession(timeout=SSE_TIMEOUT) as http_session:
                     async with http_session.get(url) as resp:
                         resp.raise_for_status()
-                        logger.info(f"[SSE:{session_id[:8]}] ✅ Conectado (status {resp.status})")
+                        logger.info(f"[SSE:{session_id[:8]}] ✅ Conectado")
                         buffer = ""
                         first_chunk = True
-                        chunk_count = 0
                         async for chunk in resp.content.iter_any():
-                            chunk_count += 1
                             if first_chunk:
                                 first_chunk = False
-                                logger.info(f"[SSE:{session_id[:8]}] Primer chunk recibido")
+                                logger.info(f"[SSE:{session_id[:8]}] Primer chunk")
                                 if ready_event is not None:
                                     ready_event.set()
                             text = chunk.decode("utf-8", errors="replace")
@@ -248,23 +351,23 @@ class OpenCodeClient:
                                 try:
                                     on_event(event)
                                 except Exception as e:
-                                    logger.error(f"[SSE:{session_id[:8]}] Error procesando evento: {e}")
-                        logger.info(f"[SSE:{session_id[:8]}] Stream terminado ({chunk_count} chunks)")
+                                    logger.error(f"[SSE:{session_id[:8]}] Error: {e}")
+                        logger.info(f"[SSE:{session_id[:8]}] Stream terminado")
             except asyncio.CancelledError:
-                logger.info(f"[SSE:{session_id[:8]}] Cancelado por usuario")
+                logger.info(f"[SSE:{session_id[:8]}] Cancelado")
                 raise
             except Exception as e:
-                logger.error(f"[SSE:{session_id[:8]}] Error: {type(e).__name__}: {e}")
+                logger.error(f"[SSE:{session_id[:8]}] Error: {e}")
                 reconnect_count += 1
                 if reconnect_count <= max_reconnects:
                     logger.warning(f"[SSE:{session_id[:8]}] Reintentando ({reconnect_count}/{max_reconnects})...")
                     await asyncio.sleep(2 ** reconnect_count)
-                    await _subscribe_with_ready()
+                    await _subscribe()
             finally:
                 if ready_event is not None and not ready_event.is_set():
                     ready_event.set()
 
-        sse_task = asyncio.create_task(_subscribe_with_ready())
+        sse_task = asyncio.create_task(_subscribe())
 
         try:
             last_event_time = asyncio.get_event_loop().time()
@@ -277,13 +380,9 @@ class OpenCodeClient:
                     yield evt
                 except asyncio.TimeoutError:
                     elapsed = asyncio.get_event_loop().time() - last_event_time
-                    # Si inactivity_timeout es 0, nunca hacer timeout (tareas infinitas)
                     if inactivity_timeout > 0 and elapsed >= inactivity_timeout:
-                        summary = sse_logger.summary()
-                        logger.warning(f"[SSE:{session_id[:8]}] Timeout inactividad: {summary}")
+                        logger.warning(f"[SSE:{session_id[:8]}] Timeout inactividad")
                         break
-                    if int(elapsed) % 60 == 0:
-                        logger.debug(f"[SSE:{session_id[:8]}] Esperando eventos... ({elapsed:.0f}s)")
                     continue
         finally:
             sse_task.cancel()
@@ -292,18 +391,7 @@ class OpenCodeClient:
             except asyncio.CancelledError:
                 pass
             summary = sse_logger.summary()
-            logger.info(f"[SSE:{session_id[:8]}] 📊 Resumen: {summary['total_events']} eventos, {summary['total_chars']} chars en {summary['duration_sec']}s")
-
-    async def health_check(self) -> bool:
-        try:
-            await self._get("/")
-            return True
-        except Exception:
-            try:
-                await self._get("/session")
-                return True
-            except Exception:
-                return False
+            logger.info(f"[SSE:{session_id[:8]}] 📊 {summary}")
 
 
 def get_models_from_cli() -> dict[str, list[dict]]:
@@ -317,13 +405,13 @@ def get_models_from_cli() -> dict[str, list[dict]]:
         output = result.stdout + result.stderr
         return _parse_models_output(output)
     except FileNotFoundError:
-        logger.error("opencode no encontrado para listar modelos")
+        logger.error("opencode no encontrado")
         return {}
     except subprocess.TimeoutExpired:
-        logger.error("Timeout ejecutando opencode models")
+        logger.error("Timeout opencode models")
         return {}
     except Exception as e:
-        logger.error(f"Error ejecutando opencode models: {e}")
+        logger.error(f"Error opencode models: {e}")
         return {}
 
 
