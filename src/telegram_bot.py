@@ -586,81 +586,66 @@ async def cmd_restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Reinicia el bot con proceso completo:
     1. Git pull
     2. Build/install dependencies
-    3. Restart systemd service
-    Con feedback en cada paso
+    3. Restart systemd service (el bot muere aquí, systemd lo reinicia)
+    
+    El feedback final se muestra en post_init() después del restart.
     """
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ Acceso denegado.")
         return
 
-    status_msg = await update.message.reply_text("🔄 *Iniciando restart...*", parse_mode="Markdown")
+    status_msg = await update.message.reply_text("🔄 *Reiniciando bot...*", parse_mode="Markdown")
     
-    async def run_step(name: str, cmd: str, cwd: str = None) -> tuple[bool, str]:
-        """Run a command and return (success, output)"""
+    async def run_step(cmd: str) -> tuple[bool, str]:
         try:
             proc = await asyncio.create_subprocess_shell(
                 cmd,
-                cwd=cwd or str(BOT_DIR),
+                cwd=str(BOT_DIR),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await proc.communicate()
             output = (stdout.decode() + stderr.decode()).strip()
-            success = proc.returncode == 0
-            return success, output[:500]  # Limit output
+            return proc.returncode == 0, output[:300]
         except Exception as e:
             return False, str(e)
     
     # Step 1: Git pull
-    await status_msg.edit_text("🔄 *Step 1: Git pull...*", parse_mode="Markdown")
-    success, output = await run_step("Git pull", "git pull")
-    if success:
-        if "Already up to date" in output or "Actualizado" in output:
-            pull_result = "✅ No hay cambios nuevos"
-        else:
-            pull_result = f"✅ Pull exitoso\n{output[:200]}"
+    await status_msg.edit_text("📥 *Git pull...*", parse_mode="Markdown")
+    success, output = await run_step("git pull")
+    pull_result = "✅ Sin cambios" if "Already up to date" in output else f"✅ {output[:100]}" if success else f"⚠️ {output[:100]}"
+    
+    # Step 2: Build
+    await status_msg.edit_text("📦 *Build...*", parse_mode="Markdown")
+    if (BOT_DIR / "requirements.txt").exists():
+        success, _ = await run_step("source .venv/bin/activate && pip install -q -r requirements.txt")
+        build_result = "✅ OK" if success else "⚠️ pip"
     else:
-        pull_result = f"⚠️ Pull: {output[:200]}"
-    logger.info(f"Restart: git pull -> {pull_result[:100]}")
+        build_result = "✅ Skip"
     
-    # Step 2: Build/install
-    await status_msg.edit_text("🔄 *Step 2: Build...*", parse_mode="Markdown")
-    
-    has_package_json = (BOT_DIR / "package.json").exists()
-    has_requirements = (BOT_DIR / "requirements.txt").exists()
-    
-    if has_package_json:
-        success, output = await run_step("npm install", "npm install --production")
-        build_result = f"✅ npm install: {output[:100]}" if success else f"⚠️ npm: {output[:100]}"
-    elif has_requirements:
-        success, output = await run_step("pip install", "source .venv/bin/activate && pip install -q -r requirements.txt")
-        build_result = f"✅ pip install: OK" if success else f"⚠️ pip: {output[:100]}"
-    else:
-        build_result = "✅ No build required"
-    logger.info(f"Restart: build -> {build_result[:100]}")
-    
-    # Step 3: Restart systemd
-    await status_msg.edit_text("🔄 *Step 3: Restart service...*", parse_mode="Markdown")
-    success, output = await run_step("systemctl restart", "sudo systemctl restart opencode-bot.service")
-    restart_result = "✅ Service restarted" if success else f"❌ Restart failed: {output[:100]}"
-    logger.info(f"Restart: systemctl -> {restart_result[:100]}")
-    
-    # Final status
-    await asyncio.sleep(2)
-    success, status_output = await run_step("systemctl status", "sudo systemctl is-active opencode-bot.service")
-    is_active = success and "active" in status_output.lower()
-    
+    # Guardar resultados para mostrar después del restart
     config = load_config()
     config["restart_pending"] = {
         "chat_id": status_msg.chat_id,
         "message_id": status_msg.message_id,
-        "pull_result": pull_result,
-        "build_result": build_result,
+        "pull": pull_result,
+        "build": build_result,
     }
     save_config(config)
     
-    final_status = "✅ *Bot reiniciado*" if is_active else "❌ *Bot no arrancó*"
-    final_msg = f"{final_status}\n\n"
+    # Final message before death
+    await status_msg.edit_text(
+        f"🔄 *Reiniciando...*\n\n{pull_result}\n{build_result}\n\n⏳ Espera confirmación...",
+        parse_mode="Markdown",
+    )
+    
+    await asyncio.sleep(1)
+    
+    # Restart - el bot muere aquí
+    await run_step("sudo systemctl restart opencode-bot.service")
+    
+    # No llegamos aquí - systemd mata el proceso
+    os._exit(0)
     final_msg += f"📥 Git: {pull_result[:100]}\n"
     final_msg += f"📦 Build: {build_result[:100]}\n"
     final_msg += f"🔄 Service: {restart_result[:100]}"
@@ -2372,41 +2357,39 @@ async def post_init(application: Application):
     logger.info(f"🔍 Check restart_pending: {config.get('restart_pending')}")
     restart_info = config.get("restart_pending")
     if restart_info:
-        logger.info(f"📩 Restart pendiente detectado! chat_id={restart_info.get('chat_id')}, msg_id={restart_info.get('message_id')}")
+        logger.info(f"📩 Restart pendiente: chat={restart_info.get('chat_id')}, msg={restart_info.get('message_id')}")
         try:
             chat_id = restart_info["chat_id"]
             msg_id = restart_info["message_id"]
+            pull_result = restart_info.get("pull", "---")
+            build_result = restart_info.get("build", "---")
             
-            model = config.get("model") or "automático"
+            model = config.get("model") or "---"
             workspace = config.get("workspace")
             workspace_name = Path(workspace).name if workspace else BOT_DIR.name
-            session_id = config.get("session_id")
-            
-            logger.info(f"📝 Info: model={model}, workspace={workspace_name}, session={session_id[:20] if session_id else None}")
             
             status_lines = [
                 "✅ *Bot Reiniciado*",
-                "━━━━━━━━━━━━━━━━",
-                f"🧠 Modelo: `{model}`",
-                f"📁 Workspace: `{workspace_name}`",
-                f"📝 Sesión: `{session_id[:20] if session_id else 'Ninguna'}`.",
-                f"🌐 Bot Server: `{BOT_PORT}`",
-                "━━━━━━━━━━━━━━━━",
+                "",
+                f"📥 Git: {pull_result}",
+                f"📦 Build: {build_result}",
+                "",
+                f"🧠 `{model}`",
+                f"📁 `{workspace_name}`",
+                f"🌐 `{BOT_PORT}`",
             ]
             
-            logger.info(f"✏️ Editando mensaje {msg_id} en chat {chat_id}...")
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=msg_id,
                 text="\n".join(status_lines),
                 parse_mode="Markdown",
             )
-            logger.info(f"✅ Mensaje editado exitosamente!")
+            logger.info(f"✅ Restart feedback enviado")
         except Exception as e:
-            logger.error(f"❌ Error notificando restart: {e}", exc_info=True)
+            logger.error(f"❌ Error restart feedback: {e}")
         config.pop("restart_pending", None)
         save_config(config)
-        logger.info(f"🗑️ restart_pending eliminado del config")
     
     commands = [
         BotCommand("start", "🤖 Estado del bot y menú principal"),
