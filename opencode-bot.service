@@ -1,6 +1,7 @@
 [Unit]
 Description=Telegram Bot - OpenCode Controller
-After=network.target
+After=network.target opencode.service
+Requires=opencode.service
 
 [Service]
 Type=simple

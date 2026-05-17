@@ -84,7 +84,7 @@ class OpenCodeServer:
         
         try:
             self.process = subprocess.Popen(
-                ["opencode", "serve", "--port", str(OPENCODE_PORT), "--hostname", "0.0.0.0"],
+                ["opencode", "serve", "--port", str(OPENCODE_PORT), "--hostname", "127.0.0.1"],
                 cwd=str(work_dir),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
