@@ -440,7 +440,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton("📁 Abrir proyecto", callback_data=f"explorer:{DEFAULT_WORKSPACE}"),
+            InlineKeyboardButton("📁 Abrir", callback_data=f"explorer:{DEFAULT_WORKSPACE}:0"),
             InlineKeyboardButton("🧠 Modelos", callback_data="models_menu"),
         ],
         [
@@ -876,7 +876,7 @@ async def cmd_proyectos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
     
     keyboard.append([
-        InlineKeyboardButton("🆕 Abrir", callback_data=f"explorer:{DEFAULT_WORKSPACE}"),
+        InlineKeyboardButton("🆕 Explorar", callback_data=f"explorer:{DEFAULT_WORKSPACE}:0"),
     ])
     
     await update.message.reply_text(
@@ -888,20 +888,24 @@ async def cmd_proyectos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_open(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Explorador de archivos para crear/abrir proyectos.
+    Explorador de archivos para abrir proyectos.
     """
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ Acceso denegado.")
         return
     
-    start_path = context.user_data.get("explorer_path", str(DEFAULT_WORKSPACE))
+    start_path = str(DEFAULT_WORKSPACE)
     
-    await _show_file_explorer(context.bot, update.message.chat_id, start_path, None)
+    await _show_file_explorer(context.bot, update.message.chat_id, start_path, None, page=0)
 
 
-async def _show_file_explorer(bot: Bot, chat_id: int, current_path: str, message_id: Optional[int]):
+async def _show_file_explorer(bot: Bot, chat_id: int, current_path: str, message_id: Optional[int], page: int = 0):
     """
-    Muestra el explorador de archivos.
+    Explorador de archivos con paginación.
+    
+    - 20 folders por página
+    - Navegar entre páginas
+    - Abrir folder como proyecto directamente
     """
     manager = get_manager()
     current_dir = Path(current_path)
@@ -909,14 +913,16 @@ async def _show_file_explorer(bot: Bot, chat_id: int, current_path: str, message
     if not current_dir.exists():
         current_dir = DEFAULT_WORKSPACE
     
+    PER_PAGE = 20
+    
     try:
         dirs = sorted([
             d for d in current_dir.iterdir()
             if d.is_dir() and not d.name.startswith(".")
         ], key=lambda x: x.name.lower())
     except PermissionError:
-        text = "❌ No tienes permiso para acceder a este directorio"
-        keyboard = [[InlineKeyboardButton("← Volver", callback_data=f"explorer:{current_dir.parent}")]]
+        text = "❌ Sin permiso"
+        keyboard = [[InlineKeyboardButton("← Volver", callback_data=f"explorer:{current_dir.parent}:0")]]
         if message_id:
             await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
         else:
@@ -924,50 +930,59 @@ async def _show_file_explorer(bot: Bot, chat_id: int, current_path: str, message
         return
     except Exception as e:
         text = f"❌ Error: {e}"
-        keyboard = [[InlineKeyboardButton("← Volver", callback_data=f"explorer:{current_dir.parent}")]]
+        keyboard = [[InlineKeyboardButton("← Volver", callback_data=f"explorer:{current_dir.parent}:0")]]
         if message_id:
             await bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
         else:
             await bot.send_message(chat_id, text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
     
-    text = f"📁 *Explorador*\n\n"
-    text += f"📍 `{current_dir}`\n"
+    total_pages = (len(dirs) // PER_PAGE) + (1 if len(dirs) % PER_PAGE else 0)
+    page = max(0, min(page, total_pages - 1))
+    
+    start = page * PER_PAGE
+    end = start + PER_PAGE
+    page_dirs = dirs[start:end]
     
     existing_project = None
     for proj in manager.list_projects():
         if proj.workspace == str(current_dir):
             existing_project = proj
-            text += f"\n✅ *Proyecto existente:* {proj.name}\n"
-            text += f"   Modelo: `{proj.model}`\n"
-            text += f"   Sesiones: {len(proj.sessions)}\n"
             break
+    
+    text = f"📁 `{current_dir.name}`"
+    if existing_project:
+        text += f"\n✅ *Abierto:* {existing_project.name}"
+    
+    if total_pages > 1:
+        text += f"\n📄 Pág {page+1}/{total_pages}"
     
     keyboard = []
     
-    for d in dirs[:12]:
+    for d in page_dirs:
         keyboard.append([
-            InlineKeyboardButton(f"📂 {d.name}", callback_data=f"explorer:{d}")
+            InlineKeyboardButton(f"📂 {d.name}", callback_data=f"explorer:{d}:0")
         ])
     
-    if len(dirs) > 12:
-        text += f"\n... y {len(dirs) - 12} más"
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("◀️", callback_data=f"explorer:{current_dir}:{page-1}"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton(f"▶️ ({end}/{len(dirs)})", callback_data=f"explorer:{current_dir}:{page+1}"))
+    if nav_row:
+        keyboard.append(nav_row)
     
-    keyboard.append([
-        InlineKeyboardButton("📂 Crear folder", callback_data=f"explorer_create:{current_dir}"),
-    ])
-    
-    action_buttons = []
+    action_row = []
     if existing_project:
-        action_buttons.append(InlineKeyboardButton("✅ Abrir proyecto", callback_data=f"project_open:{existing_project.project_id}"))
+        action_row.append(InlineKeyboardButton(f"✅ {existing_project.name}", callback_data=f"project_open:{existing_project.project_id}"))
     else:
-        action_buttons.append(InlineKeyboardButton("🆕 Crear proyecto aquí", callback_data=f"project_create_here:{current_dir}"))
-    action_buttons.append(InlineKeyboardButton("❌ Cancelar", callback_data="explorer_cancel"))
-    keyboard.append(action_buttons)
+        action_row.append(InlineKeyboardButton("📂 Abrir aquí", callback_data=f"project_open_folder:{current_dir}"))
+    action_row.append(InlineKeyboardButton("❌", callback_data="explorer_cancel"))
+    keyboard.append(action_row)
     
-    if current_dir != current_dir.parent:
+    if str(current_dir) != str(current_dir.parent):
         keyboard.append([
-            InlineKeyboardButton("← Atrás", callback_data=f"explorer:{current_dir.parent}")
+            InlineKeyboardButton("←", callback_data=f"explorer:{current_dir.parent}:0")
         ])
     
     if message_id:
@@ -1181,23 +1196,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     manager = get_manager()
-    
-    if context.user_data.get("explorer_create_path"):
-        parent_path = context.user_data.pop("explorer_create_path")
-        folder_name = text.strip()
-        
-        try:
-            new_folder = Path(parent_path) / folder_name
-            new_folder.mkdir(parents=True, exist_ok=True)
-            await update.message.reply_text(
-                f"✅ Folder creado: `{folder_name}`\n"
-                f"📍 `{new_folder}`",
-                parse_mode="Markdown",
-            )
-            await _show_file_explorer(context.bot, update.message.chat_id, str(new_folder), None)
-        except Exception as e:
-            await update.message.reply_text(f"❌ Error: {e}")
-        return
     
     if context.user_data.get("waiting_rename"):
         context.user_data["waiting_rename"] = False
@@ -1883,26 +1881,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if data.startswith("explorer:"):
-        path = data.split(":", 1)[1]
-        await _show_file_explorer(bot, chat_id, path, query.message.message_id)
+        parts = data.split(":")
+        path = parts[1] if len(parts) > 1 else str(DEFAULT_WORKSPACE)
+        page = int(parts[2]) if len(parts) > 2 else 0
+        await _show_file_explorer(bot, chat_id, path, query.message.message_id, page)
         return
     
     if data == "explorer_cancel":
         await bot.delete_message(chat_id, query.message.message_id)
         return
     
-    if data.startswith("explorer_create:"):
-        parent_path = data.split(":", 1)[1]
-        context.user_data["explorer_create_path"] = parent_path
-        await query.edit_message_text(
-            f"📂 *Crear nuevo folder*\n\n"
-            f"📍 `{parent_path}`\n\n"
-            f"Envía el nombre del nuevo folder:",
-            parse_mode="Markdown",
-        )
-        return
-    
-    if data.startswith("project_create_here:"):
+    if data.startswith("project_open_folder:"):
         workspace_path = data.split(":", 1)[1]
         manager = get_manager()
         
@@ -2245,7 +2234,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         
         keyboard.append([
-            InlineKeyboardButton("🆕 Explorar", callback_data=f"explorer:{DEFAULT_WORKSPACE}"),
+            InlineKeyboardButton("🆕 Explorar", callback_data=f"explorer:{DEFAULT_WORKSPACE}:0"),
         ])
         
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
