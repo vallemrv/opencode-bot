@@ -2353,9 +2353,14 @@ async def post_init(application: Application):
             pull_result = restart_info.get("pull", "---")
             build_result = restart_info.get("build", "---")
             
-            model = config.get("model") or "---"
-            workspace = config.get("workspace")
-            workspace_name = Path(workspace).name if workspace else BOT_DIR.name
+            # Estado real desde el manager (projects.json), no desde config.json viejo
+            active_proj = manager.get_active_project()
+            if active_proj:
+                model = active_proj.model or "---"
+                workspace_name = Path(active_proj.workspace).name if active_proj.workspace else "---"
+                project_line = f"📁 `{workspace_name}`\n🧠 `{model}`"
+            else:
+                project_line = "📂 Sin proyectos abiertos"
             
             status_lines = [
                 "✅ *Bot Reiniciado*",
@@ -2363,8 +2368,7 @@ async def post_init(application: Application):
                 f"📥 Git: {pull_result}",
                 f"📦 Build: {build_result}",
                 "",
-                f"🧠 `{model}`",
-                f"📁 `{workspace_name}`",
+                project_line,
                 f"🌐 `{BOT_PORT}`",
             ]
             
