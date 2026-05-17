@@ -233,7 +233,7 @@ class Heartbeat:
                     for part in parts:
                         part_type = part.get("type", "")
                         
-                        if part_type == "tool-invocation":
+                        if part_type in ["tool-invocation", "tool"]:
                             tool = part.get("tool", {})
                             tool_name = tool.get("name", "unknown")
                             self.task_state.tools_used[tool_name] = self.task_state.tools_used.get(tool_name, 0) + 1
@@ -1420,8 +1420,8 @@ async def _process_message(bot: Bot, chat_id: int, text: str):
                             if tokens:
                                 await heartbeat.update_state(tokens=tokens)
                         
-                        # Extraer herramienta usada
-                        if part_type == "tool-invocation":
+                        # Extraer herramienta usada (tool o tool-invocation)
+                        if part_type in ["tool-invocation", "tool"]:
                             tool = part.get("tool", {})
                             tool_name = tool.get("name", "unknown")
                             task_state.tools_used[tool_name] = task_state.tools_used.get(tool_name, 0) + 1

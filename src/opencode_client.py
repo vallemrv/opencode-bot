@@ -231,6 +231,17 @@ class OpenCodeClient:
             logger.error(f"Error borrando sesión {session_id}: {e}")
             return False
 
+    async def delete_all_sessions(self) -> int:
+        """Borra todas las sesiones y retorna el count"""
+        sessions = await self.list_sessions()
+        count = 0
+        for s in sessions:
+            sid = s.get("id")
+            if sid:
+                if await self.delete_session(sid):
+                    count += 1
+        return count
+
     async def update_session(self, session_id: str, title: str) -> dict:
         payload = {"title": title}
         return await self._patch(f"/session/{session_id}", payload)
