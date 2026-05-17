@@ -11,7 +11,7 @@ WorkingDirectory=/home/valle/proyectos/opencode-bot
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 Environment="OPENCODE_PORT=4096"
 
-ExecStart=/usr/bin/opencode serve --port 4096 --hostname 127.0.0.1
+ExecStart=/usr/bin/opencode serve --port 4096 --hostname 0.0.0.0
 Restart=always
 RestartSec=5
 
