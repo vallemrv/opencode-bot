@@ -618,10 +618,11 @@ async def cmd_restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Step 2: Build
     await status_msg.edit_text("📦 *Build...*", parse_mode="Markdown")
     if (BOT_DIR / "requirements.txt").exists():
-        success, _ = await run_step("source .venv/bin/activate && pip install -q -r requirements.txt")
-        build_result = "✅ OK" if success else "⚠️ pip"
+        pip = BOT_DIR / ".venv" / "bin" / "pip"
+        success, pip_out = await run_step(f"{pip} install -q -r requirements.txt")
+        build_result = "✅ OK" if success else f"❌ {pip_out[:120]}"
     else:
-        build_result = "✅ Skip"
+        build_result = "✅ Sin requirements.txt"
     
     # Guardar resultados para mostrar después del restart
     config = load_config()
