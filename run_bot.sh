@@ -1,23 +1,27 @@
-#!/bin/bash
-# run_bot.sh — Arranca el bot con OpenCode backend
-# El bot gestiona el opencode server internamente (watchdog)
-# Uso: ./run_bot.sh
-
+#!/usr/bin/env bash
 set -e
 
-BOT_DIR="/home/valle/proyectos/opencode-bot"
-PYTHON="$BOT_DIR/.venv/bin/python"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="$SCRIPT_DIR/.venv"
+PYTHON="$VENV/bin/python"
 
-cd "$BOT_DIR"
-source .venv/bin/activate
-
-# Verificar que opencode esté instalado
-if ! command -v opencode &>/dev/null; then
-    echo "⚠️  ADVERTENCIA: 'opencode' no encontrado en PATH"
-    echo "   Instala con: npm install -g opencode-ai"
-    echo "   O asegúrate de que esté en PATH"
-    echo ""
+# Create venv if needed
+if [ ! -f "$PYTHON" ]; then
+    echo "Creating virtualenv..."
+    python3 -m venv "$VENV"
+    "$VENV/bin/pip" install -q --upgrade pip
+    "$VENV/bin/pip" install -q -r "$SCRIPT_DIR/requirements.txt"
 fi
 
-echo "🚀 Arrancando OpenCode Bot (OpenCode backend en puerto 13001)..."
-exec "$PYTHON" src/telegram_bot.py
+# Load .env if present
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
+OPENCODE_HOST="${OPENCODE_HOST:-localhost}"
+OPENCODE_PORT="${OPENCODE_PORT:-4096}"
+echo "Starting OpenCode Bot (OpenCode at ${OPENCODE_HOST}:${OPENCODE_PORT})"
+
+exec "$PYTHON" "$SCRIPT_DIR/src/telegram_bot.py"
