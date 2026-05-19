@@ -894,31 +894,68 @@ async def cb_closedir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
-# /sessions — manage sessions of the active project
+# /sessions — manage sessions of any project
 # ---------------------------------------------------------------------------
 
 @admin_only
 async def cmd_sessions(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    active = db.get_active()
-    if not active:
-        await update.message.reply_text("No hay sesión activa. Usa /open primero.")
-        return
-
-    directory = active["directory"]
-
+    """Show all projects so the user can pick one to manage its sessions."""
     try:
-        sessions = await oc.list_sessions(directory=directory)
+        all_sessions = await oc.list_sessions()
     except Exception as exc:
         await update.message.reply_text(f"❌ Error: {exc}")
         return
 
-    active_sid = active["session_id"]
+    by_dir: dict[str, list] = defaultdict(list)
+    for s in all_sessions:
+        d = s.get("directory", "")
+        if d:
+            by_dir[d].append(s)
+
+    if not by_dir:
+        await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
+        return
+
+    active     = db.get_active()
+    active_dir = (active or {}).get("directory", "")
+
+    btns = []
+    for directory in sorted(by_dir.keys()):
+        n_sess = len(by_dir[directory])
+        name   = Path(directory).name
+        mark   = " ✅" if directory == active_dir else ""
+        dk     = _key(ctx, directory)
+        btns.append([InlineKeyboardButton(
+            f"📂 {name}{mark}  ({n_sess} sesión{'es' if n_sess != 1 else ''})",
+            callback_data=f"sesspick:{dk}",
+        )])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    await update.message.reply_text(
+        "¿De qué proyecto quieres gestionar las sesiones?",
+        reply_markup=InlineKeyboardMarkup(btns),
+    )
+
+
+async def cb_sesspick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Project chosen in /sessions → show its session picker."""
+    q = update.callback_query; await q.answer()
+    dk        = int(q.data.split(":")[1])
+    directory = _val(ctx, dk)
+
+    try:
+        sessions = await oc.list_sessions(directory=directory)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}")
+        return
+
+    active     = db.get_active()
+    active_sid = (active or {}).get("session_id", "")
     pk         = _key(ctx, directory)
 
     btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"newsess:{pk}")]]
     if sessions:
         btns.append([InlineKeyboardButton("🗑 Borrar todas", callback_data=f"sda:{pk}")])
-
     for s in sessions[:8]:
         sid   = s.get("id", "")
         title = s.get("title") or sid[:12]
@@ -928,8 +965,9 @@ async def cmd_sessions(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(f"{title[:22]}{mark}", callback_data=f"actsess:{sk}:{pk}"),
             InlineKeyboardButton("🗑", callback_data=f"delsess:{sk}:{pk}"),
         ])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
-    await update.message.reply_text(
+    await q.edit_message_text(
         f"Sesiones de `{Path(directory).name}`",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
@@ -963,22 +1001,214 @@ async def cb_sda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
-# /models — change model for active session
+# /models — change model for any session of any project
 # ---------------------------------------------------------------------------
 
 @admin_only
 async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    active = db.get_active()
-    if not active:
-        await update.message.reply_text("❌ No hay sesión activa. Usa /open primero.")
+    """Show all projects so the user can pick one to change a session's model."""
+    try:
+        all_sessions = await oc.list_sessions()
+    except Exception as exc:
+        await update.message.reply_text(f"❌ Error: {exc}")
         return
-    msg = await update.message.reply_text("⏳ Cargando modelos...")
 
-    class _MsgWrapper:
-        async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
-            await msg.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    by_dir: dict[str, list] = defaultdict(list)
+    for s in all_sessions:
+        d = s.get("directory", "")
+        if d:
+            by_dir[d].append(s)
 
-    await _show_provider_picker(_MsgWrapper(), ctx, cwd=None, skip_loading=True)
+    if not by_dir:
+        await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
+        return
+
+    active     = db.get_active()
+    active_dir = (active or {}).get("directory", "")
+
+    btns = []
+    for directory in sorted(by_dir.keys()):
+        n_sess = len(by_dir[directory])
+        name   = Path(directory).name
+        mark   = " ✅" if directory == active_dir else ""
+        dk     = _key(ctx, directory)
+        btns.append([InlineKeyboardButton(
+            f"📂 {name}{mark}  ({n_sess} sesión{'es' if n_sess != 1 else ''})",
+            callback_data=f"modpick:{dk}",
+        )])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    await update.message.reply_text(
+        "¿De qué proyecto quieres cambiar el modelo?",
+        reply_markup=InlineKeyboardMarkup(btns),
+    )
+
+
+async def cb_modpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Project chosen in /models → show its sessions."""
+    q = update.callback_query; await q.answer()
+    dk        = int(q.data.split(":")[1])
+    directory = _val(ctx, dk)
+
+    try:
+        sessions = await oc.list_sessions(directory=directory)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}")
+        return
+
+    if not sessions:
+        await q.edit_message_text(f"No hay sesiones en `{Path(directory).name}`.", parse_mode="Markdown")
+        return
+
+    active     = db.get_active()
+    active_sid = (active or {}).get("session_id", "")
+
+    if len(sessions) == 1:
+        # Only one session — go straight to provider picker
+        sid = sessions[0].get("id", "")
+        sk  = _key(ctx, sid)
+        await _show_model_provider_picker(q, ctx, directory, sid)
+        return
+
+    btns = []
+    for s in sessions[:8]:
+        sid   = s.get("id", "")
+        title = s.get("title") or sid[:12]
+        mark  = " ✅" if sid == active_sid else ""
+        sk    = _key(ctx, sid)
+        dk2   = _key(ctx, directory)
+        btns.append([InlineKeyboardButton(f"{title[:28]}{mark}", callback_data=f"modsess:{sk}:{dk2}")])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    await q.edit_message_text(
+        f"📂 `{Path(directory).name}` — elige sesión:",
+        reply_markup=InlineKeyboardMarkup(btns),
+        parse_mode="Markdown",
+    )
+
+
+async def cb_modsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Session chosen in /models → show provider picker."""
+    q = update.callback_query; await q.answer()
+    parts     = q.data.split(":")
+    sid       = _val(ctx, int(parts[1]))
+    directory = _val(ctx, int(parts[2]))
+    await _show_model_provider_picker(q, ctx, directory, sid)
+
+
+async def _show_model_provider_picker(q, ctx, directory: str, sid: str):
+    """Show provider list for the /models flow (targeting a specific session)."""
+    sk       = _key(ctx, sid)
+    cwd_name = Path(directory).name
+
+    await q.edit_message_text(f"📂 `{cwd_name}`\n⏳ Cargando modelos...", parse_mode="Markdown")
+
+    try:
+        models = await _get_models(ctx)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error al cargar modelos: {exc}", parse_mode="Markdown")
+        return
+
+    groups: dict[str, list] = defaultdict(list)
+    for m in models:
+        groups[m.get("providerID", "?")].append(m.get("id") or m.get("modelID", "?"))
+
+    btns = []
+    for pid in sorted(groups):
+        btns.append([InlineKeyboardButton(
+            f"🔹 {pid}",
+            callback_data=f"modprov:{sk}:{_key(ctx, pid)}:0",
+        )])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    await q.edit_message_text(
+        f"📂 `{cwd_name}`\n📦 Elige proveedor:",
+        reply_markup=InlineKeyboardMarkup(btns),
+        parse_mode="Markdown",
+    )
+
+
+async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Provider chosen in /models → show model list."""
+    q = update.callback_query; await q.answer()
+    parts = q.data.split(":")
+    sk    = int(parts[1])
+    pid_k = int(parts[2])
+    page  = int(parts[3]) if len(parts) > 3 else 0
+    sid   = _val(ctx, sk)
+    pid   = _val(ctx, pid_k)
+
+    try:
+        models = await _get_models(ctx)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}", parse_mode="Markdown")
+        return
+
+    mids = sorted([m.get("id") or m.get("modelID", "?") for m in models if m.get("providerID") == pid])
+    PER  = 6
+    total_pages = max(1, (len(mids) + PER - 1) // PER)
+    page  = max(0, min(page, total_pages - 1))
+    chunk = mids[page * PER:(page + 1) * PER]
+
+    btns = []
+    row: list[InlineKeyboardButton] = []
+    for mid in chunk:
+        mk = _key(ctx, f"{pid}|{mid}")
+        row.append(InlineKeyboardButton(mid, callback_data=f"setmodel:{sk}:{mk}"))
+        if len(row) == 2:
+            btns.append(row); row = []
+    if row:
+        btns.append(row)
+    btns.append([InlineKeyboardButton("⚙ Defecto del proveedor", callback_data=f"setmodel:{sk}:{_key(ctx, f'{pid}|')}")])
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀", callback_data=f"modprov:{sk}:{pid_k}:{page-1}"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton("▶", callback_data=f"modprov:{sk}:{pid_k}:{page+1}"))
+    if nav:
+        btns.append(nav)
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    await q.edit_message_text(
+        f"🧩 *{pid}*  _{page+1}/{total_pages}_",
+        reply_markup=InlineKeyboardMarkup(btns),
+        parse_mode="Markdown",
+    )
+
+
+async def cb_setmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Model chosen in /models → apply to the target session."""
+    q = update.callback_query; await q.answer()
+    parts     = q.data.split(":")
+    sid       = _val(ctx, int(parts[1]))
+    model_str = _val(ctx, int(parts[2]))
+    pid, mid  = model_str.split("|", 1) if "|" in model_str else ("", "")
+
+    # Get session info to find directory and show name
+    try:
+        sess_info = await oc.get_session(sid)
+        directory = sess_info.get("directory", "")
+        title     = sess_info.get("title") or sid[:12]
+    except Exception:
+        directory = ""
+        title     = sid[:12]
+
+    if pid and mid:
+        try:
+            await oc.update_session(sid, directory=directory or None, model={"providerID": pid, "id": mid})
+        except Exception as exc:
+            await q.edit_message_text(f"❌ Error al cambiar modelo: {exc}", parse_mode="Markdown")
+            return
+
+    cwd_name    = Path(directory).name if directory else "?"
+    model_label = f"{pid}/{mid}" if pid and mid else "default del proveedor"
+    await q.edit_message_text(
+        f"✅ Modelo actualizado\n"
+        f"📂 `{cwd_name}` · `{title}`\n"
+        f"🧩 `{model_label}`",
+        parse_mode="Markdown",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1067,7 +1297,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
-# /projects — list all projects that have sessions
+# /projects — read-only overview of all projects with sessions
 # ---------------------------------------------------------------------------
 
 @admin_only
@@ -1095,17 +1325,14 @@ async def cmd_projects(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     active_sid = (active or {}).get("session_id", "")
 
     lines = ["*Proyectos abiertos*\n"]
-    btns  = []
     for directory in sorted(by_dir.keys()):
-        sessions = by_dir[directory]
-        p        = proj_by_wt.get(directory)
-        name     = (p or {}).get("name") or Path(directory).name
-        is_active = directory == active_dir
-
-        # Which session is "current" for this project
-        cur_sess = next((s for s in sessions if s.get("id") == active_sid), sessions[0])
+        sessions   = by_dir[directory]
+        p          = proj_by_wt.get(directory)
+        name       = (p or {}).get("name") or Path(directory).name
+        is_active  = directory == active_dir
+        cur_sess   = next((s for s in sessions if s.get("id") == active_sid), sessions[0])
         sess_title = cur_sess.get("title") or cur_sess.get("id", "")[:12]
-        marker = " ◀" if is_active else ""
+        marker     = " ◀ activo" if is_active else ""
 
         lines.append(
             f"📂 *{name}*{marker}\n"
@@ -1113,33 +1340,7 @@ async def cmd_projects(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"   {len(sessions)} sesión{'es' if len(sessions) != 1 else ''}"
         )
 
-        if not is_active:
-            dk = _key(ctx, directory)
-            sk = _key(ctx, cur_sess.get("id", ""))
-            btns.append([InlineKeyboardButton(
-                f"▶ Activar {name}",
-                callback_data=f"projact:{dk}:{sk}",
-            )])
-
-    kbd = InlineKeyboardMarkup(btns) if btns else None
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=kbd)
-
-
-async def cb_projact(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Activate a project's session from /projects."""
-    q = update.callback_query; await q.answer()
-    parts     = q.data.split(":")
-    directory = _val(ctx, int(parts[1]))
-    sid       = _val(ctx, int(parts[2]))
-
-    db.set_active(sid, directory)
-    cwd_name = Path(directory).name
-
-    # Rebuild the message without the button for the now-active project
-    await q.edit_message_text(
-        f"✅ Proyecto activo: `{cwd_name}`\n\nUsa /projects para ver el estado actualizado.",
-        parse_mode="Markdown",
-    )
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -1348,7 +1549,11 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_cancel,    pattern=r"^cancel:"))
     app.add_handler(CallbackQueryHandler(cb_sendpick,  pattern=r"^sendpick:"))
     app.add_handler(CallbackQueryHandler(cb_sendsess,  pattern=r"^sendsess:"))
-    app.add_handler(CallbackQueryHandler(cb_projact,   pattern=r"^projact:"))
+    app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
+    app.add_handler(CallbackQueryHandler(cb_modpick,   pattern=r"^modpick:"))
+    app.add_handler(CallbackQueryHandler(cb_modsess,   pattern=r"^modsess:"))
+    app.add_handler(CallbackQueryHandler(cb_modprov,   pattern=r"^modprov:"))
+    app.add_handler(CallbackQueryHandler(cb_setmodel,  pattern=r"^setmodel:"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
@@ -1363,8 +1568,8 @@ def main():
             BotCommand("projects", "Ver proyectos con sesiones abiertas"),
             BotCommand("send",     "Enviar prompt a un proyecto específico"),
             BotCommand("close",    "Cerrar proyecto"),
-            BotCommand("sessions", "Gestionar sesiones del proyecto activo"),
-            BotCommand("models",   "Cambiar modelo"),
+            BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
+            BotCommand("models",   "Cambiar modelo de cualquier sesión"),
             BotCommand("esc",      "Cancelar tarea actual"),
         ])
 
