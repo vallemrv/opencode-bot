@@ -85,6 +85,16 @@ def _key(ctx: ContextTypes.DEFAULT_TYPE, value: str) -> int:
     store[k] = value
     return k
 
+def _key_raw(bot_data: dict, value: str) -> int:
+    """Same as _key but takes bot_data directly (for use outside handlers)."""
+    store = bot_data.setdefault("ks", {})
+    for k, v in store.items():
+        if v == value:
+            return k
+    k = len(store)
+    store[k] = value
+    return k
+
 def _val(ctx: ContextTypes.DEFAULT_TYPE, k: int) -> str:
     return ctx.bot_data.get("ks", {}).get(k, "")
 
@@ -174,14 +184,16 @@ def _build_status_text(st: dict) -> str:
     cwd_name   = Path(directory).name or "?"
     model      = st.get("model") or "default"
     reasoning  = st.get("reasoning_text") or ""
+    sess_title = st.get("session_title") or ""
 
     elapsed_str = _format_elapsed(time.time() - st.get("start_time", time.time()))
     icons = {"busy": "🔴", "thinking": "🤔", "idle": "🟢", "error": "❌"}
     icon  = icons.get(state, "⚪")
 
+    title_part = f" · `{sess_title[:20]}`" if sess_title else ""
     lines = [
         f"{icon} *{state.upper()}*",
-        f"📂 `{cwd_name}` | 🧩 `{model}`",
+        f"📂 `{cwd_name}`{title_part} | 🧩 `{model}`",
         f"⏱ `{elapsed_str}` | 💬 `{msgs}` msgs | 📝 `{len(files)}` edits",
     ]
     if tool:
@@ -225,12 +237,13 @@ async def _heartbeat_loop(ctx: ContextTypes.DEFAULT_TYPE):
         await _update_status_now(ctx.application, sid, force=True)
 
 
-def _start_status(app: Application, session_id: str, directory: str, msg_id: int, model: str = "default"):
+def _start_status(app: Application, session_id: str, directory: str, msg_id: int, model: str = "default", session_title: str = ""):
     statuses = app.bot_data.setdefault("statuses", {})
     statuses[session_id] = {
         "msg_id": msg_id,
         "directory": directory,
         "model": model,
+        "session_title": session_title,
         "state": "busy",
         "tool": None,
         "tools_seen": [],
@@ -382,9 +395,11 @@ async def sse_listener(app: Application) -> None:
                                 f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
                                 if model_obj else "default"
                             )
+                            sess_title = sess_info.get("title") or ""
                         except Exception:
                             directory   = ""
                             model_label = "default"
+                            sess_title  = ""
                         cwd_name = Path(directory).name or "?"
                         status_msg = await app.bot.send_message(
                             ADMIN_ID,
@@ -396,7 +411,7 @@ async def sse_listener(app: Application) -> None:
                                 InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
                             ]]),
                         )
-                        _start_status(app, sid, directory, status_msg.message_id, model=model_label)
+                        _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
                         _track_msg(app, status_msg.message_id, sid, directory)
                         st = app.bot_data["statuses"].get(sid)
 
@@ -430,6 +445,90 @@ async def sse_listener(app: Application) -> None:
                     await _finish_status(app, sid)
                 continue
 
+            # ---- permission request (OpenCode asks for approval) ----
+            if etype == "permission.updated":
+                perm_id   = props.get("id", "")
+                title     = props.get("title", "OpenCode solicita permiso")
+                perm_type = props.get("type", "")
+                meta      = props.get("metadata", {})
+                p_sid     = props.get("sessionID", sid)
+
+                # Try to get directory from statuses or active session
+                p_dir = ""
+                p_st  = statuses.get(p_sid)
+                if p_st:
+                    p_dir = p_st.get("directory", "")
+                if not p_dir:
+                    active = db.get_active()
+                    if active and active.get("session_id") == p_sid:
+                        p_dir = active.get("directory", "")
+
+                pk  = _key_raw(app.bot_data, perm_id)
+                sk  = _key_raw(app.bot_data, p_sid)
+                dk  = _key_raw(app.bot_data, p_dir)
+
+                # Build options: allow, deny + remember variants
+                btns = [
+                    [
+                        InlineKeyboardButton("✅ Permitir", callback_data=f"perm:{sk}:{pk}:{dk}:allow"),
+                        InlineKeyboardButton("✅ Permitir siempre", callback_data=f"perm:{sk}:{pk}:{dk}:allow_always"),
+                    ],
+                    [
+                        InlineKeyboardButton("❌ Denegar", callback_data=f"perm:{sk}:{pk}:{dk}:deny"),
+                        InlineKeyboardButton("❌ Denegar siempre", callback_data=f"perm:{sk}:{pk}:{dk}:deny_always"),
+                    ],
+                    [InlineKeyboardButton("✏️ Respuesta personalizada", callback_data=f"perminput:{sk}:{pk}:{dk}")],
+                    [InlineKeyboardButton("🚫 Cancelar tarea", callback_data=f"permabort:{sk}:{dk}")],
+                ]
+
+                pattern_info = ""
+                pattern = props.get("pattern")
+                if pattern:
+                    if isinstance(pattern, list):
+                        pattern_info = "\n`" + "`, `".join(pattern[:5]) + "`"
+                    else:
+                        pattern_info = f"\n`{pattern}`"
+
+                meta_info = ""
+                for k, v in list(meta.items())[:3]:
+                    meta_info += f"\n• `{k}`: `{str(v)[:60]}`"
+
+                perm_msg = await app.bot.send_message(
+                    ADMIN_ID,
+                    f"🔐 *Permiso requerido*\n\n"
+                    f"*{title}*\n"
+                    f"Tipo: `{perm_type}`"
+                    f"{pattern_info}"
+                    f"{meta_info}\n\n"
+                    f"_OpenCode está esperando tu respuesta para continuar._",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(btns),
+                )
+                # Track pending permissions
+                perms = app.bot_data.setdefault("pending_perms", {})
+                perms[perm_id] = {
+                    "msg_id": perm_msg.message_id,
+                    "session_id": p_sid,
+                    "directory": p_dir,
+                }
+                continue
+
+            if etype == "permission.replied":
+                # Clean up tracked permission if any
+                perm_id = props.get("permissionID", "")
+                perms   = app.bot_data.get("pending_perms", {})
+                perm    = perms.pop(perm_id, None)
+                if perm and perm.get("msg_id"):
+                    try:
+                        await app.bot.edit_message_reply_markup(
+                            chat_id=ADMIN_ID,
+                            message_id=perm["msg_id"],
+                            reply_markup=None,
+                        )
+                    except Exception:
+                        pass
+                continue
+
             # ---- streaming parts ----
             if etype == "message.part.updated":
                 part      = props.get("part", {})
@@ -460,6 +559,14 @@ async def sse_listener(app: Application) -> None:
                         st["tool"] = tool_name
                         if tool_name not in st["tools_seen"]:
                             st["tools_seen"].append(tool_name)
+                        # Track file edits from write/edit tools
+                        EDIT_TOOLS = {"write", "edit", "patch", "fs_write", "str_replace_editor",
+                                      "str_replace_based_edit_tool", "create_file", "write_file"}
+                        if tool_name.lower() in EDIT_TOOLS or "write" in tool_name.lower() or "edit" in tool_name.lower():
+                            inp = part.get("input") or {}
+                            fpath = inp.get("path") or inp.get("file_path") or inp.get("filePath") or inp.get("target_file", "")
+                            if fpath:
+                                st["files_edited"].add(Path(fpath).name)
                     await _update_status_now(app, sid, force=True)
                 continue
 
@@ -815,6 +922,79 @@ async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cb_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     await q.edit_message_text("❌ Cancelado.")
+
+
+# ---------------------------------------------------------------------------
+# Permission callbacks
+# ---------------------------------------------------------------------------
+
+async def cb_perm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Handle permission allow/deny responses."""
+    q = update.callback_query; await q.answer()
+    parts     = q.data.split(":")
+    # perm:sk:pk:dk:response  (pk=perm_id_key, dk=dir_key)
+    sk        = int(parts[1])
+    perm_k    = int(parts[2])
+    dk        = int(parts[3])
+    response  = parts[4]  # allow | allow_always | deny | deny_always
+
+    sid       = _val(ctx, sk)
+    perm_id   = _val(ctx, perm_k)
+    directory = _val(ctx, dk)
+
+    remember  = response.endswith("_always")
+    resp_val  = response.replace("_always", "")  # "allow" or "deny"
+
+    try:
+        await oc.respond_permission(sid, perm_id, resp_val, remember=remember, directory=directory or None)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error al responder permiso: {exc}", parse_mode="Markdown")
+        return
+
+    icons = {"allow": "✅", "deny": "❌"}
+    icon  = icons.get(resp_val, "✅")
+    note  = " (recordado)" if remember else ""
+    await q.edit_message_text(
+        f"{icon} Permiso *{resp_val}*{note}",
+        parse_mode="Markdown",
+    )
+    # Remove from pending
+    ctx.bot_data.get("pending_perms", {}).pop(perm_id, None)
+
+
+async def cb_perminput(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Ask user to type a custom permission response."""
+    q = update.callback_query; await q.answer()
+    parts   = q.data.split(":")
+    sk      = int(parts[1])
+    perm_k  = int(parts[2])
+    dk      = int(parts[3])
+
+    # Store pending custom perm input
+    ctx.bot_data["perm_input"] = {
+        "session_id": _val(ctx, sk),
+        "perm_id":    _val(ctx, perm_k),
+        "directory":  _val(ctx, dk),
+        "msg_id":     q.message.message_id,
+    }
+    await q.edit_message_text(
+        "✏️ Escribe tu respuesta al permiso (ej: `allow`, `deny`, o texto libre):\n\n"
+        "_El siguiente mensaje que envíes se usará como respuesta._",
+        parse_mode="Markdown",
+    )
+
+
+async def cb_permabort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Abort session when permission is pending."""
+    q = update.callback_query; await q.answer()
+    parts     = q.data.split(":")
+    sk        = int(parts[1])
+    dk        = int(parts[2])
+    sid       = _val(ctx, sk)
+    directory = _val(ctx, dk)
+
+    msg = await _do_abort(ctx.application, sid, directory)
+    await q.edit_message_text(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -1253,6 +1433,21 @@ async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
+    # Pending custom permission response?
+    perm_input = ctx.bot_data.pop("perm_input", None)
+    if perm_input:
+        sid       = perm_input["session_id"]
+        perm_id   = perm_input["perm_id"]
+        directory = perm_input["directory"]
+        try:
+            await oc.respond_permission(sid, perm_id, text, remember=False, directory=directory or None)
+            await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+        except Exception as exc:
+            await update.message.reply_text(f"❌ Error al responder permiso: {exc}")
+        # Remove from pending_perms tracking
+        ctx.bot_data.get("pending_perms", {}).pop(perm_id, None)
+        return
+
     # /send flow: explicit target from picker takes highest priority
     send_target = ctx.bot_data.pop("send_target", None)
     if send_target:
@@ -1547,6 +1742,9 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_sda,       pattern=r"^sda:"))
     app.add_handler(CallbackQueryHandler(cb_abort,     pattern=r"^abort:"))
     app.add_handler(CallbackQueryHandler(cb_cancel,    pattern=r"^cancel:"))
+    app.add_handler(CallbackQueryHandler(cb_perm,      pattern=r"^perm:"))
+    app.add_handler(CallbackQueryHandler(cb_perminput, pattern=r"^perminput:"))
+    app.add_handler(CallbackQueryHandler(cb_permabort, pattern=r"^permabort:"))
     app.add_handler(CallbackQueryHandler(cb_sendpick,  pattern=r"^sendpick:"))
     app.add_handler(CallbackQueryHandler(cb_sendsess,  pattern=r"^sendsess:"))
     app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
