@@ -195,19 +195,38 @@ def _build_status_text(st: dict) -> str:
     icons = {"busy": "🔴", "thinking": "🤔", "idle": "🟢", "error": "❌"}
     icon  = icons.get(state, "⚪")
 
+    # Model: show only the model id part (after slash) to save space
+    model_short = model.split("/")[-1] if "/" in model else model
+
     title_part = f" · `{sess_title[:20]}`" if sess_title else ""
     lines = [
-        f"{icon} *{state.upper()}*",
-        f"📂 `{cwd_name}`{title_part} | 🧩 `{model}`",
-        f"⏱ `{elapsed_str}` | 💬 `{msgs}` msgs | 📝 `{len(files)}` edits",
+        f"{icon} *{state.upper()}* | 📂 `{cwd_name}`{title_part}",
+        f"🧩 `{model_short}` | ⏱ `{elapsed_str}`",
     ]
+
+    # Files edited (only show if any)
+    if files:
+        files_str = ", ".join(f"`{f}`" for f in list(files)[:4])
+        if len(files) > 4:
+            files_str += f" +{len(files)-4}"
+        lines.append(f"📝 {files_str}")
+
+    # Current tool being called
     if tool:
         lines.append(f"🔧 `{tool}`")
-    if tools_seen:
-        lines.append(f"⚡ `{len(set(tools_seen))}` herramientas")
+
+    # All tools seen (compact list, deduplicated)
+    unique_tools = list(dict.fromkeys(tools_seen))  # preserve order, deduplicate
+    if unique_tools and not tool:
+        # Only show tool history when not currently running a tool
+        tools_str = " · ".join(f"`{t}`" for t in unique_tools[-5:])
+        lines.append(f"⚡ {tools_str}")
+
+    # Reasoning snippet (only when actively thinking)
     if reasoning and state == "thinking":
-        snippet = reasoning[-150:].replace("`", "'").replace("*", "")
+        snippet = reasoning[-200:].replace("`", "'").replace("*", "").strip()
         lines.append(f"💭 _{snippet}_")
+
     lines.append("")
     lines.append("_Pulsa_ /esc _para cancelar_")
     return "\n".join(lines)
@@ -287,24 +306,28 @@ async def _finish_status(app: Application, session_id: str):
     reply_text = st.get("final_text") if st else None
     directory  = st.get("directory") if st else None
 
-    if not reply_text and directory:
+    # Fetch messages once — used both for fallback text and token info
+    fetched_messages = None
+    if directory:
         try:
-            messages = await oc.get_messages(session_id, directory=directory)
-            for m in reversed(messages):
-                info  = m.get("info", {})
-                role  = info.get("role") or m.get("role")
-                parts = m.get("parts", [])
-                if role == "assistant":
-                    texts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("type") == "text" and p.get("text")]
-                    if texts:
-                        reply_text = "\n".join(texts)
-                        break
+            fetched_messages = await oc.get_messages(session_id, directory=directory)
         except Exception as exc:
             logger.error(f"Failed to get messages: {exc}")
 
+    if not reply_text and fetched_messages:
+        for m in reversed(fetched_messages):
+            info  = m.get("info", {})
+            role  = info.get("role") or m.get("role")
+            parts = m.get("parts", [])
+            if role == "assistant":
+                texts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("type") == "text" and p.get("text")]
+                if texts:
+                    reply_text = "\n".join(texts)
+                    break
+
     cwd_name = Path(directory or "").name or "?"
 
-    # Build model + context % info
+    # Build model + context % info (reuse fetched_messages for token count)
     model_info = ""
     try:
         session_data = await oc.get_session(session_id, directory=directory)
@@ -312,34 +335,53 @@ async def _finish_status(app: Application, session_id: str):
         provider_id  = model_obj.get("providerID", "")
         model_id     = model_obj.get("id", "")
 
-        # Get tokens from the last assistant message
         total_tokens = 0
-        try:
-            messages = await oc.get_messages(session_id, directory=directory)
-            for m in reversed(messages):
+        if fetched_messages:
+            for m in reversed(fetched_messages):
                 info = m.get("info", {})
                 if info.get("role") == "assistant":
                     tok = info.get("tokens", {}) or {}
                     cache = tok.get("cache", {}) or {}
                     total_tokens = (tok.get("input", 0) or 0) + (cache.get("read", 0) or 0) + (cache.get("write", 0) or 0)
                     break
-        except Exception:
-            pass
 
-        model_label = model_id or ""
+        model_short = model_id.split("/")[-1] if "/" in (model_id or "") else (model_id or "")
         ctx_str = ""
         if provider_id and model_id:
             ctx_limit = await oc.get_model_context_limit(provider_id, model_id)
             if ctx_limit and ctx_limit > 0 and total_tokens > 0:
                 pct = round(total_tokens / ctx_limit * 100, 1)
-                ctx_str = f" | ctx {pct}%"
-        if model_label:
-            model_info = f"`{model_label}`{ctx_str}\n"
+                ctx_str = f" ctx {pct}%"
+        if model_short:
+            model_info = f"`{model_short}`{ctx_str}"
     except Exception as exc:
         logger.warning(f"Could not get session info for footer: {exc}")
 
+    # Elapsed time
+    elapsed = ""
+    if st and st.get("start_time"):
+        elapsed = f" ⏱{_format_elapsed(time.time() - st['start_time'])}"
+
+    # Files edited summary
+    files_edited = st.get("files_edited", set()) if st else set()
+    files_str = ""
+    if files_edited:
+        names = list(files_edited)[:3]
+        files_str = " 📝 " + ", ".join(f"`{f}`" for f in names)
+        if len(files_edited) > 3:
+            files_str += f" +{len(files_edited)-3}"
+
+    header_parts = [f"✅ `{cwd_name}`"]
+    if model_info:
+        header_parts.append(model_info)
+    if elapsed:
+        header_parts.append(elapsed)
+    header_line = " | ".join(header_parts)
+    if files_str:
+        header_line += files_str
+
     if not reply_text:
-        sent = await app.bot.send_message(ADMIN_ID, f"✅ _{cwd_name}_ {model_info}Listo.", parse_mode="Markdown")
+        sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo._", parse_mode="Markdown")
         _track_msg(app, sent.message_id, session_id, directory or "")
         return
 
@@ -347,18 +389,29 @@ async def _finish_status(app: Application, session_id: str):
     chunks = [reply_text[i:i+chunk_size] for i in range(0, len(reply_text), chunk_size)]
     last_sent = None
     for i, chunk in enumerate(chunks):
-        header = f"✅ _{cwd_name}_ {model_info}\n" if i == 0 else ""
+        header = f"{header_line}\n" if i == 0 else ""
         kbd = None
         if i == len(chunks) - 1 and reply_text.rstrip().endswith("?"):
             kbd = InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Ignorar", callback_data="cancel:")
             ]])
-        last_sent = await app.bot.send_message(
-            ADMIN_ID,
-            f"{header}{chunk}",
-            parse_mode="Markdown",
-            reply_markup=kbd,
-        )
+        try:
+            last_sent = await app.bot.send_message(
+                ADMIN_ID,
+                f"{header}{chunk}",
+                parse_mode="Markdown",
+                reply_markup=kbd,
+            )
+        except BadRequest:
+            # Fallback: send as plain text if Markdown parsing fails
+            try:
+                last_sent = await app.bot.send_message(
+                    ADMIN_ID,
+                    f"{header}{chunk}",
+                    reply_markup=kbd,
+                )
+            except Exception as exc2:
+                logger.error(f"Failed to send final reply chunk: {exc2}")
     if last_sent:
         _track_msg(app, last_sent.message_id, session_id, directory or "")
 
@@ -708,17 +761,20 @@ async def sse_listener(app: Application) -> None:
                 part_type = part.get("type", "")
 
                 if part_type == "step-start":
-                    # New step: reset accumulated text so steps don't bleed into each other
-                    st["last_text"]  = None
-                    st["final_text"] = None
-                    st["tool"]       = None
+                    # New step: clear current tool and last_text fragment,
+                    # but preserve final_text accumulated so far across steps
+                    st["last_text"] = None
+                    st["tool"]      = None
 
                 elif part_type == "text":
                     st["state"] = "busy"
                     text = part.get("text", "")
                     if text:
-                        st["final_text"] = text
+                        # updated events carry the full current text of this part;
+                        # overwrite last_text (current part snapshot) but use it
+                        # as the authoritative final_text for this step
                         st["last_text"]  = text
+                        st["final_text"] = text
                     await _update_status_now(app, sid)
 
                 elif part_type == "reasoning":
