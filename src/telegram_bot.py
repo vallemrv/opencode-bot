@@ -291,9 +291,11 @@ async def _finish_status(app: Application, session_id: str):
         try:
             messages = await oc.get_messages(session_id, directory=directory)
             for m in reversed(messages):
-                if m.get("role") == "assistant":
-                    parts = m.get("parts", [])
-                    texts = [p.get("text", "") for p in parts if p.get("type") == "text" and p.get("text")]
+                info  = m.get("info", {})
+                role  = info.get("role") or m.get("role")
+                parts = m.get("parts", [])
+                if role == "assistant":
+                    texts = [p.get("text", "") for p in parts if isinstance(p, dict) and p.get("type") == "text" and p.get("text")]
                     if texts:
                         reply_text = "\n".join(texts)
                         break
