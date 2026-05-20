@@ -124,8 +124,67 @@ class OpenCodeClient:
     # ------------------------------------------------------------------ #
 
     async def list_sessions(self, directory: str | None = None) -> list[dict]:
-        """List sessions, optionally scoped to a directory/project."""
-        return await self._get("/session", directory=directory)
+        """
+        List sessions. If directory is given, scoped to that project.
+        If not, fetches all projects and aggregates sessions from each one,
+        because the bare /session endpoint only returns sessions for the
+        server's own project.
+        """
+        if directory:
+            return await self._get("/session", directory=directory)
+        # Aggregate across all known projects
+        try:
+            projects = await self._get("/project")
+        except Exception:
+            projects = []
+        # Build a map worktree -> projectID to filter out sessions that don't belong
+        wt_to_pid: dict[str, str] = {
+            p["worktree"]: p["id"]
+            for p in projects
+            if p.get("worktree") and p.get("worktree") != "/" and p.get("id")
+        }
+        worktrees = list(wt_to_pid.keys())
+        all_sessions: list[dict] = []
+        seen_ids: set[str] = set()
+        for wt in worktrees:
+            pid = wt_to_pid[wt]
+            try:
+                sessions = await self._get("/session", directory=wt)
+                for s in sessions:
+                    sid = s.get("id", "")
+                    # Skip sessions that belong to a different project (e.g. global leaking in)
+                    if s.get("projectID") and s.get("projectID") != pid:
+                        continue
+                    if sid and sid not in seen_ids:
+                        seen_ids.add(sid)
+                        # Inject the worktree so callers can group by project
+                        s = {**s, "_worktree": wt}
+                        all_sessions.append(s)
+            except Exception:
+                pass
+        if not all_sessions:
+            # Last resort: bare call
+            try:
+                bare = await self._get("/session")
+                for s in bare:
+                    sid = s.get("id", "")
+                    if sid and sid not in seen_ids:
+                        seen_ids.add(sid)
+                        all_sessions.append(s)
+            except Exception:
+                pass
+        else:
+            # Also merge bare sessions in case some projects aren't in /project list
+            try:
+                bare = await self._get("/session")
+                for s in bare:
+                    sid = s.get("id", "")
+                    if sid and sid not in seen_ids:
+                        seen_ids.add(sid)
+                        all_sessions.append(s)
+            except Exception:
+                pass
+        return all_sessions
 
     async def get_session(self, session_id: str, directory: str | None = None) -> dict:
         return await self._get(f"/session/{session_id}", directory=directory)
@@ -152,6 +211,33 @@ class OpenCodeClient:
 
     async def abort_session(self, session_id: str, directory: str | None = None) -> Any:
         return await self._post(f"/session/{session_id}/abort", {}, directory=directory)
+
+    async def respond_permission(
+        self,
+        session_id: str,
+        permission_id: str,
+        response: str,
+        remember: bool = False,
+        directory: str | None = None,
+    ) -> Any:
+        body = {"response": response, "remember": remember}
+        return await self._post(f"/session/{session_id}/permissions/{permission_id}", body, directory=directory)
+
+    # ------------------------------------------------------------------ #
+    #  Question tool                                                       #
+    # ------------------------------------------------------------------ #
+
+    async def list_questions(self, directory: str | None = None) -> list[dict]:
+        """List all pending question requests."""
+        return await self._get("/question", directory=directory)
+
+    async def reply_question(self, request_id: str, answers: list[list[str]], directory: str | None = None) -> Any:
+        """Reply to a question request. answers is a list per question, each a list of selected labels."""
+        return await self._post(f"/question/{request_id}/reply", {"answers": answers}, directory=directory)
+
+    async def reject_question(self, request_id: str, directory: str | None = None) -> Any:
+        """Reject a question request (dismiss)."""
+        return await self._post(f"/question/{request_id}/reject", {}, directory=directory)
 
     # ------------------------------------------------------------------ #
     #  Messages                                                            #
@@ -180,6 +266,19 @@ class OpenCodeClient:
 
     async def list_models(self) -> list[dict]:
         return await self._get("/api/model")
+
+    async def get_model_context_limit(self, provider_id: str, model_id: str) -> int | None:
+        """Return context window size (tokens) for a given model, or None if unknown."""
+        try:
+            data = await self._get("/provider")
+            for provider in data.get("all", []):
+                if provider.get("id") == provider_id:
+                    models = provider.get("models", {})
+                    model = models.get(model_id, {})
+                    return model.get("limit", {}).get("context")
+        except Exception:
+            pass
+        return None
 
     # ------------------------------------------------------------------ #
     #  SSE event stream                                                    #

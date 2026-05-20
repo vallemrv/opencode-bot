@@ -28,7 +28,9 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 
+import shutil
 import db
+import transcription as grok_stt
 from opencode_client import OpenCodeClient
 
 # ---------------------------------------------------------------------------
@@ -44,6 +46,9 @@ ADMIN_ID  = int(os.environ["TELEGRAM_ADMIN_ID"])
 OC_HOST   = os.getenv("OPENCODE_HOST", "localhost")
 OC_PORT   = int(os.getenv("OPENCODE_PORT", "4096"))
 WORKSPACE = Path(os.getenv("DEFAULT_WORKSPACE", "~/proyectos")).expanduser()
+
+# Directory of this bot — excluded from /sessions and /close listings
+BOT_DIR = str(Path(__file__).parent.parent.resolve())
 
 oc = OpenCodeClient(OC_HOST, OC_PORT)
 
@@ -297,8 +302,31 @@ async def _finish_status(app: Application, session_id: str):
 
     cwd_name = Path(directory or "").name or "?"
 
+    # Build model + context % info
+    model_info = ""
+    try:
+        session_data = await oc.get_session(session_id, directory=directory)
+        model_obj    = session_data.get("model") or {}
+        provider_id  = model_obj.get("providerID", "")
+        model_id     = model_obj.get("id", "")
+        tokens_in    = session_data.get("tokens_input", 0) or 0
+        tokens_cache = session_data.get("tokens_cache_read", 0) or 0
+        total_tokens = tokens_in + tokens_cache
+
+        model_label = model_id or ""
+        ctx_str = ""
+        if provider_id and model_id:
+            ctx_limit = await oc.get_model_context_limit(provider_id, model_id)
+            if ctx_limit and ctx_limit > 0 and total_tokens > 0:
+                pct = round(total_tokens / ctx_limit * 100, 1)
+                ctx_str = f" | ctx {pct}%"
+        if model_label:
+            model_info = f"`{model_label}`{ctx_str}\n"
+    except Exception as exc:
+        logger.warning(f"Could not get session info for footer: {exc}")
+
     if not reply_text:
-        sent = await app.bot.send_message(ADMIN_ID, f"✅ _{cwd_name}_ Listo.", parse_mode="Markdown")
+        sent = await app.bot.send_message(ADMIN_ID, f"✅ _{cwd_name}_ {model_info}Listo.", parse_mode="Markdown")
         _track_msg(app, sent.message_id, session_id, directory or "")
         return
 
@@ -306,7 +334,7 @@ async def _finish_status(app: Application, session_id: str):
     chunks = [reply_text[i:i+chunk_size] for i in range(0, len(reply_text), chunk_size)]
     last_sent = None
     for i, chunk in enumerate(chunks):
-        header = f"✅ _{cwd_name}_\n\n" if i == 0 else ""
+        header = f"✅ _{cwd_name}_ {model_info}\n" if i == 0 else ""
         kbd = None
         if i == len(chunks) - 1 and reply_text.rstrip().endswith("?"):
             kbd = InlineKeyboardMarkup([[
@@ -340,7 +368,13 @@ async def _drain_queue(app: Application, session_id: str):
     cwd_name  = Path(directory).name or "?"
 
     try:
-        await oc.send_message_async(session_id, text, directory=directory)
+        # Apply pending model if any
+        pending_models = app.bot_data.get("pending_model", {})
+        pending    = pending_models.pop(session_id, None)
+        provider_id = pending["providerID"] if pending else None
+        model_id    = pending["modelID"]    if pending else None
+        await oc.send_message_async(session_id, text, directory=directory,
+                                    provider_id=provider_id, model_id=model_id)
         remaining = len(q) if q else 0
         note = f" ({remaining} más en cola)" if remaining else ""
         await app.bot.send_message(
@@ -350,6 +384,91 @@ async def _drain_queue(app: Application, session_id: str):
         )
     except Exception as exc:
         await app.bot.send_message(ADMIN_ID, f"❌ Error al enviar mensaje encolado: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Question tool handler
+# ---------------------------------------------------------------------------
+
+async def _handle_question_asked(app: Application, props: dict) -> None:
+    """
+    When the LLM calls the `question` tool, build inline keyboards for each
+    question and send them to Telegram. The session stays paused until the
+    user answers.
+
+    props structure:
+      {
+        "id": "que...",
+        "sessionID": "ses...",
+        "questions": [
+          { "header": "...", "question": "...", "options": [{"label":"..","description":".."},...],
+            "multiple": false, "custom": true }
+        ]
+      }
+    """
+    req_id    = props.get("id", "")
+    session_id = props.get("sessionID", "")
+    questions  = props.get("questions", [])
+
+    if not req_id or not questions:
+        return
+
+    # Store pending question state
+    pending = app.bot_data.setdefault("pending_questions", {})
+    pending[req_id] = {
+        "session_id": session_id,
+        "questions":  questions,
+        "answers":    [None] * len(questions),  # one answer per question slot
+        "msg_ids":    [],
+    }
+
+    # Store req_id in key-store so callbacks can retrieve it
+    rk = _key_raw(app.bot_data, req_id)
+    sk = _key_raw(app.bot_data, session_id)
+
+    msg_ids = []
+    for q_idx, q in enumerate(questions):
+        header   = q.get("header", f"Pregunta {q_idx+1}")
+        question = q.get("question", "")
+        options  = q.get("options", [])
+        multiple = q.get("multiple", False)
+        custom   = q.get("custom", True)
+
+        # Build option buttons (one per row)
+        btns = []
+        for opt_idx, opt in enumerate(options):
+            label = opt.get("label", "")
+            desc  = opt.get("description", "")
+            ok    = _key_raw(app.bot_data, f"{req_id}|{q_idx}|{opt_idx}|{label}")
+            btn_text = f"{label}"
+            if desc and len(desc) < 40:
+                btn_text = f"{label} — {desc}"
+            btns.append([InlineKeyboardButton(
+                btn_text[:64],
+                callback_data=f"qans:{rk}:{sk}:{q_idx}:{ok}",
+            )])
+
+        # Custom answer + cancel row
+        if custom:
+            ck = _key_raw(app.bot_data, f"{req_id}|{q_idx}|custom")
+            btns.append([InlineKeyboardButton(
+                "✏️ Escribe tu propia respuesta",
+                callback_data=f"qcustom:{rk}:{sk}:{q_idx}",
+            )])
+        btns.append([InlineKeyboardButton(
+            "❌ Cancelar pregunta",
+            callback_data=f"qreject:{rk}:{sk}",
+        )])
+
+        sent = await app.bot.send_message(
+            ADMIN_ID,
+            f"❓ *{header}*\n\n{question}",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(btns),
+        )
+        msg_ids.append(sent.message_id)
+
+    pending[req_id]["msg_ids"] = msg_ids
 
 
 # SSE listener — global, no DB filtering
@@ -371,6 +490,24 @@ async def sse_listener(app: Application) -> None:
         try:
             if etype in ("server.connected", "session.created", "session.updated", "session.deleted"):
                 # No local DB to update — OpenCode handles it natively
+                continue
+
+            # ---- question tool (LLM asks user a question) ----
+            if etype == "question.asked":
+                await _handle_question_asked(app, props)
+                continue
+
+            if etype == "question.replied" or etype == "question.rejected":
+                req_id = props.get("requestID", "")
+                q_data = app.bot_data.get("pending_questions", {}).pop(req_id, None)
+                if q_data and q_data.get("msg_ids"):
+                    for mid in q_data["msg_ids"]:
+                        try:
+                            await app.bot.edit_message_reply_markup(
+                                chat_id=ADMIN_ID, message_id=mid, reply_markup=None
+                            )
+                        except Exception:
+                            pass
                 continue
 
             if not sid:
@@ -594,6 +731,14 @@ async def sse_listener(app: Application) -> None:
         except Exception as exc:
             logger.error(f"SSE handler error [{etype}]: {exc}", exc_info=True)
 
+def _is_bot_dir(directory: str) -> bool:
+    """Return True if the directory is the bot's own project directory."""
+    try:
+        return Path(directory).resolve() == Path(BOT_DIR).resolve()
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Folder browser
 # ---------------------------------------------------------------------------
@@ -634,8 +779,25 @@ def _folder_kbd(ctx, path: Path, page: int):
     return f"📂 `{path}`  _{page+1}/{total}_", InlineKeyboardMarkup(btns)
 
 
+async def _server_ok(reply_fn) -> bool:
+    """Ping OpenCode server; if unreachable, send a message and return False."""
+    try:
+        ok = await oc.ping()
+    except Exception:
+        ok = False
+    if not ok:
+        await reply_fn(
+            f"❌ OpenCode server no disponible en `{OC_HOST}:{OC_PORT}`.\n"
+            "Arráncalo con `opencode serve` y vuelve a intentarlo.",
+            parse_mode="Markdown",
+        )
+    return ok
+
+
 @admin_only
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await _server_ok(update.message.reply_text):
+        return
     txt, kbd = _folder_kbd(ctx, WORKSPACE, 0)
     await update.message.reply_text(txt, reply_markup=kbd, parse_mode="Markdown")
 
@@ -802,7 +964,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     pid, mid  = model_str.split("|", 1) if "|" in model_str else ("", "")
 
     if pk == 0:
-        # /models mode — update model of active session
+        # /models mode — store pending model, applied on next prompt
         active = db.get_active()
         if not active:
             await q.edit_message_text("⚠️ No hay sesión activa.")
@@ -810,12 +972,10 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         sid       = active["session_id"]
         directory = active["directory"]
         if pid and mid:
-            try:
-                await oc.update_session(sid, directory=directory, model={"providerID": pid, "id": mid})
-            except Exception as exc:
-                logger.warning(f"Could not update session model: {exc}")
+            pending = ctx.bot_data.setdefault("pending_model", {})
+            pending[sid] = {"providerID": pid, "modelID": mid}
         await q.edit_message_text(
-            f"✅ Modelo: `{model_str or 'default'}`",
+            f"✅ Modelo `{model_str or 'default'}` aplicado al próximo prompt.",
             parse_mode="Markdown",
         )
     else:
@@ -871,8 +1031,21 @@ async def cb_actsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     db.set_active(sid, cwd)
     cwd_name = Path(cwd).name or "?"
 
+    model_label = "default"
+    sess_title  = sid[:12]
+    try:
+        sess_info   = await oc.get_session(sid, directory=cwd or None)
+        sess_title  = sess_info.get("title") or sid[:12]
+        model_obj   = sess_info.get("model", {})
+        if model_obj:
+            model_label = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+    except Exception:
+        pass
+
     await q.edit_message_text(
-        f"✅ Sesión activa\n📂 `{cwd_name}`",
+        f"✅ Sesión activa\n"
+        f"📂 `{cwd_name}` · `{sess_title}`\n"
+        f"🧩 `{model_label}`",
         parse_mode="Markdown",
     )
 
@@ -922,6 +1095,122 @@ async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cb_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     await q.edit_message_text("❌ Cancelado.")
+
+
+# ---------------------------------------------------------------------------
+# Question tool callbacks
+# ---------------------------------------------------------------------------
+
+async def _send_question_answer(app: Application, req_id: str, session_id: str, answers: list):
+    """Send the collected answers to OpenCode and clean up."""
+    try:
+        await oc.reply_question(req_id, answers)
+    except Exception as exc:
+        await app.bot.send_message(ADMIN_ID, f"❌ Error enviando respuesta: {exc}")
+        return
+    # Clean up pending
+    q_data = app.bot_data.get("pending_questions", {}).pop(req_id, None)
+    if q_data:
+        for mid in q_data.get("msg_ids", []):
+            try:
+                await app.bot.edit_message_reply_markup(
+                    chat_id=ADMIN_ID, message_id=mid, reply_markup=None
+                )
+            except Exception:
+                pass
+
+
+async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Option button pressed for a question."""
+    q = update.callback_query; await q.answer()
+    parts  = q.data.split(":")
+    rk     = int(parts[1])
+    sk     = int(parts[2])
+    q_idx  = int(parts[3])
+    ok     = int(parts[4])
+
+    req_id     = _val(ctx, rk)
+    session_id = _val(ctx, sk)
+    opt_str    = _val(ctx, ok)   # "req_id|q_idx|opt_idx|label"
+    label      = opt_str.split("|", 3)[-1] if "|" in opt_str else opt_str
+
+    pending = ctx.bot_data.get("pending_questions", {})
+    q_data  = pending.get(req_id)
+    if not q_data:
+        await q.edit_message_text("⚠️ Pregunta ya respondida o expirada.")
+        return
+
+    questions   = q_data["questions"]
+    n_questions = len(questions)
+
+    # Record answer for this question slot
+    q_data["answers"][q_idx] = [label]
+
+    # Check if all questions have an answer
+    if all(a is not None for a in q_data["answers"]):
+        await q.edit_message_text(f"✅ Respuesta enviada: *{label}*", parse_mode="Markdown")
+        await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
+    else:
+        await q.edit_message_text(
+            f"✅ Pregunta {q_idx+1}/{n_questions} respondida: *{label}*\n\n_Responde las demás preguntas._",
+            parse_mode="Markdown",
+        )
+
+
+async def cb_qcustom(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """User wants to type a custom answer for a question."""
+    q = update.callback_query; await q.answer()
+    parts  = q.data.split(":")
+    rk     = int(parts[1])
+    sk     = int(parts[2])
+    q_idx  = int(parts[3])
+
+    req_id     = _val(ctx, rk)
+    session_id = _val(ctx, sk)
+
+    pending = ctx.bot_data.get("pending_questions", {})
+    q_data  = pending.get(req_id)
+    if not q_data:
+        await q.edit_message_text("⚠️ Pregunta ya respondida o expirada.")
+        return
+
+    # Store custom answer context
+    ctx.bot_data["question_custom_input"] = {
+        "req_id":     req_id,
+        "session_id": session_id,
+        "q_idx":      q_idx,
+        "msg_id":     q.message.message_id,
+    }
+    await q.edit_message_text(
+        "✏️ Escribe tu respuesta a continuación:\n\n_El próximo mensaje que envíes se usará como respuesta._",
+        parse_mode="Markdown",
+    )
+
+
+async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """User cancels/rejects a question."""
+    q = update.callback_query; await q.answer()
+    parts  = q.data.split(":")
+    rk     = int(parts[1])
+    req_id = _val(ctx, int(parts[1]))
+
+    try:
+        await oc.reject_question(req_id)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}")
+        return
+
+    q_data = ctx.bot_data.get("pending_questions", {}).pop(req_id, None)
+    if q_data:
+        for mid in q_data.get("msg_ids", []):
+            try:
+                await ctx.bot.edit_message_reply_markup(
+                    chat_id=ADMIN_ID, message_id=mid, reply_markup=None
+                )
+            except Exception:
+                pass
+
+    await q.edit_message_text("❌ Pregunta cancelada. OpenCode continuará sin respuesta.")
 
 
 # ---------------------------------------------------------------------------
@@ -1036,15 +1325,37 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"📂 {name}  ({len(sessions)} sesiones)",
             callback_data=f"closedir:{ck}",
         )])
+    btns.append([InlineKeyboardButton("🗑 Cerrar todo del server", callback_data="closeall:")])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
+    total = sum(len(v) for v in by_dir.values())
     await update.message.reply_text(
-        "Selecciona proyecto a cerrar (borra todas sus sesiones):",
+        f"Selecciona proyecto a quitar del bot, o cierra todo ({total} sesiones en {len(by_dir)} proyectos):",
         reply_markup=InlineKeyboardMarkup(btns),
     )
 
 
 async def cb_closedir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Project selected in /close → ask what to do."""
+    q = update.callback_query; await q.answer()
+    ck        = int(q.data.split(":")[1])
+    directory = _val(ctx, ck)
+    name      = Path(directory).name
+
+    btns = [
+        [InlineKeyboardButton("🗑 Borrar sesiones en OpenCode", callback_data=f"closedel:{ck}")],
+        [InlineKeyboardButton("↩ Solo quitar sesión activa del bot", callback_data=f"closebot:{ck}")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")],
+    ]
+    await q.edit_message_text(
+        f"📂 `{name}` — ¿qué quieres hacer?",
+        reply_markup=InlineKeyboardMarkup(btns),
+        parse_mode="Markdown",
+    )
+
+
+async def cb_closedel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Delete all sessions of a project from OpenCode."""
     q = update.callback_query; await q.answer()
     ck        = int(q.data.split(":")[1])
     directory = _val(ctx, ck)
@@ -1055,22 +1366,72 @@ async def cb_closedir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"❌ Error: {exc}")
         return
 
+    deleted = 0
     for s in sessions:
         sid = s.get("id", "")
         try:
             await oc.delete_session(sid, directory=directory)
+            ctx.application.bot_data.get("statuses", {}).pop(sid, None)
+            deleted += 1
         except Exception:
             pass
-        ctx.application.bot_data.get("statuses", {}).pop(sid, None)
 
     active = db.get_active()
     if active and active.get("directory") == directory:
         db.clear_active()
 
     await q.edit_message_text(
-        f"✅ `{Path(directory).name}` cerrado ({len(sessions)} sesiones borradas)",
+        f"✅ `{Path(directory).name}` cerrado — {deleted} sesiones borradas de OpenCode.",
         parse_mode="Markdown",
     )
+
+
+async def cb_closebot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Only clear active session in bot, keep OpenCode sessions intact."""
+    q = update.callback_query; await q.answer()
+    ck        = int(q.data.split(":")[1])
+    directory = _val(ctx, ck)
+
+    active = db.get_active()
+    if active and active.get("directory") == directory:
+        db.clear_active()
+
+    await q.edit_message_text(
+        f"✅ `{Path(directory).name}` quitado del bot (sesiones siguen en OpenCode).",
+        parse_mode="Markdown",
+    )
+
+
+async def cb_closeall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Delete ALL sessions from the OpenCode server and clear active session."""
+    q = update.callback_query; await q.answer()
+
+    await q.edit_message_text("⏳ Borrando todas las sesiones del server...")
+
+    try:
+        all_sessions = await oc.list_sessions()
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}")
+        return
+
+    deleted = 0
+    errors  = 0
+    for s in all_sessions:
+        sid = s.get("id", "")
+        directory = s.get("directory") or s.get("_worktree") or None
+        try:
+            await oc.delete_session(sid, directory=directory)
+            ctx.application.bot_data.get("statuses", {}).pop(sid, None)
+            deleted += 1
+        except Exception:
+            errors += 1
+
+    db.clear_active()
+
+    msg = f"✅ {deleted} sesiones borradas del server."
+    if errors:
+        msg += f" ({errors} errores)"
+    await q.edit_message_text(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -1375,18 +1736,14 @@ async def cb_setmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         title     = sid[:12]
 
     if pid and mid:
-        try:
-            await oc.update_session(sid, directory=directory or None, model={"providerID": pid, "id": mid})
-        except Exception as exc:
-            await q.edit_message_text(f"❌ Error al cambiar modelo: {exc}", parse_mode="Markdown")
-            return
+        pending = ctx.bot_data.setdefault("pending_model", {})
+        pending[sid] = {"providerID": pid, "modelID": mid}
 
     cwd_name    = Path(directory).name if directory else "?"
     model_label = f"{pid}/{mid}" if pid and mid else "default del proveedor"
     await q.edit_message_text(
-        f"✅ Modelo actualizado\n"
-        f"📂 `{cwd_name}` · `{title}`\n"
-        f"🧩 `{model_label}`",
+        f"✅ Modelo `{model_label}` aplicado al próximo prompt.\n"
+        f"📂 `{cwd_name}` · `{title}`",
         parse_mode="Markdown",
     )
 
@@ -1426,6 +1783,136 @@ async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# File upload → save to active session cwd
+# ---------------------------------------------------------------------------
+
+TMP_DIR = Path("/tmp/opencode-bot-media")
+
+@admin_only
+async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Handle documents, photos, videos — save directly to the active session cwd."""
+    msg = update.message
+    file_id: str | None = None
+    file_name: str | None = None
+
+    if msg.document:
+        file_id   = msg.document.file_id
+        file_name = msg.document.file_name or f"document_{int(time.time())}"
+    elif msg.photo:
+        file_id   = msg.photo[-1].file_id
+        file_name = f"photo_{int(time.time())}.jpg"
+    elif msg.video:
+        file_id   = msg.video.file_id
+        file_name = msg.video.file_name or f"video_{int(time.time())}.mp4"
+
+    if not file_id:
+        await msg.reply_text("❌ Tipo de archivo no soportado.")
+        return
+
+    active = db.get_active()
+    if not active:
+        await msg.reply_text("❌ No hay sesión activa. Usa /open para abrir un proyecto.")
+        return
+
+    cwd      = active["directory"]
+    cwd_name = Path(cwd).name
+    save_path = Path(cwd) / file_name
+
+    try:
+        tg_file = await ctx.bot.get_file(file_id)
+        await tg_file.download_to_drive(save_path)
+    except Exception as exc:
+        await msg.reply_text(f"❌ Error al guardar el archivo: {exc}")
+        return
+
+    caption = msg.caption or ""
+    caption_note = f"\n📝 _{caption}_" if caption else ""
+    await msg.reply_text(
+        f"✅ `{file_name}` guardado en `{cwd_name}`{caption_note}",
+        parse_mode="Markdown",
+    )
+
+
+@admin_only
+async def handle_audio_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Handle audio/voice — transcribe with Grok STT, save file to cwd."""
+    msg = update.message
+    file_id: str | None = None
+    file_name: str | None = None
+
+    if msg.audio:
+        file_id   = msg.audio.file_id
+        file_name = msg.audio.file_name or f"audio_{int(time.time())}.mp3"
+    elif msg.voice:
+        file_id   = msg.voice.file_id
+        file_name = f"voice_{int(time.time())}.ogg"
+
+    if not file_id:
+        await msg.reply_text("❌ Tipo de audio no soportado.")
+        return
+
+    active   = db.get_active()
+    cwd      = active["directory"] if active else None
+    cwd_name = Path(cwd).name if cwd else None
+
+    # Download to temp directory
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = TMP_DIR / file_name
+    try:
+        tg_file = await ctx.bot.get_file(file_id)
+        await tg_file.download_to_drive(tmp_path)
+    except Exception as exc:
+        await msg.reply_text(f"❌ Error al descargar el audio: {exc}")
+        return
+
+    # Move to cwd if there's an active session
+    if cwd:
+        final_path = Path(cwd) / file_name
+        shutil.move(str(tmp_path), str(final_path))
+        saved_info = f"`{cwd_name}/{file_name}`"
+    else:
+        final_path = tmp_path
+        saved_info = f"`/tmp/.../{file_name}` (sin sesión activa)"
+
+    # Transcribe with Grok STT and send directly to OpenCode
+    if grok_stt.is_configured():
+        status_msg = await msg.reply_text("🎙️ Transcribiendo audio con Grok...")
+        transcribed = await grok_stt.transcribe(str(final_path))
+        if transcribed:
+            if active and active.get("session_id"):
+                sid      = active["session_id"]
+                cwd_name_str = Path(cwd).name if cwd else "?"
+                try:
+                    await oc.send_message_async(sid, transcribed, directory=cwd)
+                    await status_msg.edit_text(
+                        f"🎙️ *Transcripción enviada a* `{cwd_name_str}`:\n\n{transcribed}",
+                        parse_mode="Markdown",
+                    )
+                except Exception as exc:
+                    await status_msg.edit_text(
+                        f"🎙️ *Transcripción* (error al enviar: {exc}):\n\n{transcribed}",
+                        parse_mode="Markdown",
+                    )
+            else:
+                await status_msg.edit_text(
+                    f"🎙️ *Transcripción* (sin sesión activa):\n\n{transcribed}\n\n"
+                    f"💾 Archivo: {saved_info}",
+                    parse_mode="Markdown",
+                )
+        else:
+            await status_msg.edit_text(
+                f"⚠️ No se pudo transcribir el audio.\n💾 Archivo guardado en {saved_info}",
+                parse_mode="Markdown",
+            )
+    else:
+        await msg.reply_text(
+            f"💾 Audio guardado en {saved_info}\n\n"
+            f"_Transcripción no disponible: configura XAI\\_API\\_KEY._",
+            parse_mode="Markdown",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Plain text → prompt
 # ---------------------------------------------------------------------------
 
@@ -1444,8 +1931,30 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
         except Exception as exc:
             await update.message.reply_text(f"❌ Error al responder permiso: {exc}")
-        # Remove from pending_perms tracking
         ctx.bot_data.get("pending_perms", {}).pop(perm_id, None)
+        return
+
+    # Pending custom question answer?
+    q_custom = ctx.bot_data.pop("question_custom_input", None)
+    if q_custom:
+        req_id     = q_custom["req_id"]
+        session_id = q_custom["session_id"]
+        q_idx      = q_custom["q_idx"]
+        pending    = ctx.bot_data.get("pending_questions", {})
+        q_data     = pending.get(req_id)
+        if q_data:
+            q_data["answers"][q_idx] = [text]
+            if all(a is not None for a in q_data["answers"]):
+                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+                await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
+            else:
+                n = len(q_data["questions"])
+                await update.message.reply_text(
+                    f"✅ Pregunta {q_idx+1}/{n} respondida: `{text}`\n\n_Responde las demás preguntas._",
+                    parse_mode="Markdown",
+                )
+        else:
+            await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
         return
 
     # /send flow: explicit target from picker takes highest priority
@@ -1478,8 +1987,18 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    if not await _server_ok(update.message.reply_text):
+        return
+
+    # Apply pending model change if any for this session
+    pending_models = ctx.bot_data.get("pending_model", {})
+    pending = pending_models.pop(sid, None)
+    provider_id = pending["providerID"] if pending else None
+    model_id    = pending["modelID"]    if pending else None
+
     try:
-        await oc.send_message_async(sid, text, directory=directory)
+        await oc.send_message_async(sid, text, directory=directory,
+                                    provider_id=provider_id, model_id=model_id)
     except Exception as exc:
         await update.message.reply_text(f"❌ Error al enviar: {exc}")
         return
@@ -1506,13 +2025,14 @@ async def cmd_projects(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     by_dir: dict[str, list] = defaultdict(list)
     for s in all_sessions:
-        d = s.get("directory", "")
+        d = s.get("_worktree") or s.get("directory", "")
         if d:
             by_dir[d].append(s)
 
     if not by_dir:
-        await update.message.reply_text("No hay proyectos con sesiones abiertas.")
+        await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
         return
+
 
     proj_by_wt = {p.get("worktree", ""): p for p in projects}
     active     = db.get_active()
@@ -1685,10 +2205,10 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🧩 Modelo: `{model_label}`\n\n"
             f"*Comandos*\n"
             f"/open — abrir proyecto o cambiar sesión\n"
-            f"/projects — ver todos los proyectos con sesiones abiertas\n"
+            f"/projects — ver todos los proyectos con sesiones\n"
             f"/send — enviar prompt a un proyecto específico\n"
-            f"/sessions — sesiones del proyecto activo (`{cwd_name}`)\n"
-            f"/models — modelo de la sesión activa (`{cwd_name}`)\n"
+            f"/sessions — gestionar sesiones (todas o por proyecto)\n"
+            f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
             f"/esc — cancelar la tarea en curso"
         )
@@ -1703,10 +2223,10 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Sin sesión activa ({total} sesiones en el servidor)\n\n"
             f"*Comandos*\n"
             f"/open — navega carpetas, elige proyecto y modelo, crea sesión\n"
-            f"/projects — ver todos los proyectos con sesiones abiertas\n"
+            f"/projects — ver todos los proyectos con sesiones\n"
             f"/send — enviar prompt a un proyecto específico\n"
-            f"/sessions — ver y gestionar sesiones del proyecto actual\n"
-            f"/models — cambiar el modelo de la sesión activa\n"
+            f"/sessions — gestionar sesiones (todas o por proyecto)\n"
+            f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
             f"/esc — cancelar la tarea en curso"
         )
@@ -1739,12 +2259,18 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_actsess,   pattern=r"^actsess:"))
     app.add_handler(CallbackQueryHandler(cb_delsess,   pattern=r"^delsess:"))
     app.add_handler(CallbackQueryHandler(cb_closedir,  pattern=r"^closedir:"))
+    app.add_handler(CallbackQueryHandler(cb_closedel,  pattern=r"^closedel:"))
+    app.add_handler(CallbackQueryHandler(cb_closebot,  pattern=r"^closebot:"))
+    app.add_handler(CallbackQueryHandler(cb_closeall,  pattern=r"^closeall:"))
     app.add_handler(CallbackQueryHandler(cb_sda,       pattern=r"^sda:"))
     app.add_handler(CallbackQueryHandler(cb_abort,     pattern=r"^abort:"))
     app.add_handler(CallbackQueryHandler(cb_cancel,    pattern=r"^cancel:"))
     app.add_handler(CallbackQueryHandler(cb_perm,      pattern=r"^perm:"))
     app.add_handler(CallbackQueryHandler(cb_perminput, pattern=r"^perminput:"))
     app.add_handler(CallbackQueryHandler(cb_permabort, pattern=r"^permabort:"))
+    app.add_handler(CallbackQueryHandler(cb_qans,      pattern=r"^qans:"))
+    app.add_handler(CallbackQueryHandler(cb_qcustom,   pattern=r"^qcustom:"))
+    app.add_handler(CallbackQueryHandler(cb_qreject,   pattern=r"^qreject:"))
     app.add_handler(CallbackQueryHandler(cb_sendpick,  pattern=r"^sendpick:"))
     app.add_handler(CallbackQueryHandler(cb_sendsess,  pattern=r"^sendsess:"))
     app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
@@ -1753,11 +2279,15 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_modprov,   pattern=r"^modprov:"))
     app.add_handler(CallbackQueryHandler(cb_setmodel,  pattern=r"^setmodel:"))
 
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, handle_file_upload))
+    app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE, handle_audio_upload))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    app.job_queue.run_once(
-        lambda c: asyncio.ensure_future(sse_listener(app)), when=1
-    )
+    async def _start_sse(c):
+        task = asyncio.ensure_future(sse_listener(app))
+        app.bot_data["_sse_task"] = task
+
+    app.job_queue.run_once(_start_sse, when=1)
 
     async def post_init(application: Application):
         await application.bot.set_my_commands([
@@ -1774,6 +2304,13 @@ def main():
     app.post_init = post_init
 
     async def post_shutdown(application: Application):
+        task = application.bot_data.get("_sse_task")
+        if task and not task.done():
+            task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=3)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
         await oc.close()
 
     app.post_shutdown = post_shutdown
