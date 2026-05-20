@@ -309,9 +309,8 @@ async def _finish_status(app: Application, session_id: str):
         model_obj    = session_data.get("model") or {}
         provider_id  = model_obj.get("providerID", "")
         model_id     = model_obj.get("id", "")
-        tokens_in    = session_data.get("tokens_input", 0) or 0
-        tokens_cache = session_data.get("tokens_cache_read", 0) or 0
-        total_tokens = tokens_in + tokens_cache
+        tokens_obj   = session_data.get("tokens") or {}
+        total_tokens = tokens_obj.get("input", 0) or 0
 
         model_label = model_id or ""
         ctx_str = ""
