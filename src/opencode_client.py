@@ -265,7 +265,14 @@ class OpenCodeClient:
     # ------------------------------------------------------------------ #
 
     async def list_models(self) -> list[dict]:
-        return await self._get("/api/model")
+        """Return flat list of models from /provider endpoint."""
+        data = await self._get("/provider")
+        models = []
+        for provider in data.get("all", []):
+            pid = provider.get("id", "")
+            for mid, model in provider.get("models", {}).items():
+                models.append({**model, "providerID": pid, "id": mid})
+        return models
 
     async def get_model_context_limit(self, provider_id: str, model_id: str) -> int | None:
         """Return context window size (tokens) for a given model, or None if unknown."""
