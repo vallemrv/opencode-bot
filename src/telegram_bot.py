@@ -705,6 +705,8 @@ async def sse_listener(app: Application) -> None:
                 logger.info(f"SSE message.part.updated type={part_type} keys={list(part.keys())}")
 
                 if not st:
+                    continue
+
                 elif part_type == "patch":
                     # patch event lists all files modified in this step
                     if st:
