@@ -513,7 +513,7 @@ async def sse_listener(app: Application) -> None:
         props = payload.get("properties", {})
         sid   = props.get("sessionID", "")
 
-        logger.debug(f"SSE {etype} sid={sid[:12] if sid else '-'}")
+        logger.info(f"SSE {etype} sid={sid[:12] if sid else '-'}")
 
         try:
             if etype in ("server.connected", "session.created", "session.updated", "session.deleted"):
@@ -702,9 +702,20 @@ async def sse_listener(app: Application) -> None:
             if etype == "message.part.updated":
                 part      = props.get("part", {})
                 part_type = part.get("type", "")
+                logger.info(f"SSE message.part.updated type={part_type} keys={list(part.keys())}")
 
                 if not st:
+                elif part_type == "patch":
+                    # patch event lists all files modified in this step
+                    if st:
+                        files = part.get("files", [])
+                        for f in files:
+                            fname = Path(f).name if f else ""
+                            if fname:
+                                st["files_edited"].add(fname)
                     continue
+
+                continue
 
                 if part_type == "text":
                     st["state"] = "busy"
@@ -763,6 +774,8 @@ async def sse_listener(app: Application) -> None:
                     await _update_status_now(app, sid)
                 continue
 
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.error(f"SSE handler error [{etype}]: {exc}", exc_info=True)
 
