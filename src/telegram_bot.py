@@ -412,10 +412,27 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
     if not req_id or not questions:
         return
 
+    # Resolve directory from statuses or active session
+    directory = ""
+    statuses  = app.bot_data.get("statuses", {})
+    st = statuses.get(session_id)
+    if st:
+        directory = st.get("directory", "")
+    if not directory:
+        active = db.get_active()
+        if active and active.get("session_id") == session_id:
+            directory = active.get("directory", "")
+    if not directory:
+        # Fallback: any active session
+        active = db.get_active()
+        if active:
+            directory = active.get("directory", "")
+
     # Store pending question state
     pending = app.bot_data.setdefault("pending_questions", {})
     pending[req_id] = {
         "session_id": session_id,
+        "directory":  directory,
         "questions":  questions,
         "answers":    [None] * len(questions),  # one answer per question slot
         "msg_ids":    [],
@@ -1102,8 +1119,11 @@ async def cb_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def _send_question_answer(app: Application, req_id: str, session_id: str, answers: list):
     """Send the collected answers to OpenCode and clean up."""
+    # Get directory from pending before popping
+    q_data_pre = app.bot_data.get("pending_questions", {}).get(req_id, {})
+    directory  = q_data_pre.get("directory", "")
     try:
-        await oc.reply_question(req_id, answers)
+        await oc.reply_question(req_id, answers, directory=directory or None)
     except Exception as exc:
         await app.bot.send_message(ADMIN_ID, f"❌ Error enviando respuesta: {exc}")
         return
@@ -1193,8 +1213,11 @@ async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     rk     = int(parts[1])
     req_id = _val(ctx, int(parts[1]))
 
+    q_data    = ctx.bot_data.get("pending_questions", {}).get(req_id, {})
+    directory = q_data.get("directory", "")
+
     try:
-        await oc.reject_question(req_id)
+        await oc.reject_question(req_id, directory=directory or None)
     except Exception as exc:
         await q.edit_message_text(f"❌ Error: {exc}")
         return
