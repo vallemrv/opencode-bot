@@ -31,6 +31,7 @@ from telegram.error import BadRequest
 import shutil
 import db
 import transcription as grok_stt
+import md2tgv2
 from opencode_client import OpenCodeClient
 
 # ---------------------------------------------------------------------------
@@ -353,35 +354,36 @@ async def _finish_status(app: Application, session_id: str):
                 pct = round(total_tokens / ctx_limit * 100, 1)
                 ctx_str = f" ctx {pct}%"
         if model_short:
-            model_info = f"`{model_short}`{ctx_str}"
+            # MarkdownV2: backtick code + escaped plain text
+            model_info = f"`{md2tgv2._escape(model_short)}`{md2tgv2._escape(ctx_str)}"
     except Exception as exc:
         logger.warning(f"Could not get session info for footer: {exc}")
 
     # Elapsed time
     elapsed = ""
     if st and st.get("start_time"):
-        elapsed = f" ⏱{_format_elapsed(time.time() - st['start_time'])}"
+        elapsed = md2tgv2._escape(f"⏱{_format_elapsed(time.time() - st['start_time'])}")
 
     # Files edited summary
     files_edited = st.get("files_edited", set()) if st else set()
     files_str = ""
     if files_edited:
         names = list(files_edited)[:3]
-        files_str = " 📝 " + ", ".join(f"`{f}`" for f in names)
+        files_str = " 📝 " + ", ".join(f"`{md2tgv2._escape(f)}`" for f in names)
         if len(files_edited) > 3:
-            files_str += f" +{len(files_edited)-3}"
+            files_str += md2tgv2._escape(f" +{len(files_edited)-3}")
 
-    header_parts = [f"✅ `{cwd_name}`"]
+    header_parts = [f"✅ `{md2tgv2._escape(cwd_name)}`"]
     if model_info:
         header_parts.append(model_info)
     if elapsed:
         header_parts.append(elapsed)
-    header_line = " | ".join(header_parts)
+    header_line = " \\| ".join(header_parts)
     if files_str:
         header_line += files_str
 
     if not reply_text:
-        sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo._", parse_mode="Markdown")
+        sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo\\._", parse_mode="MarkdownV2")
         _track_msg(app, sent.message_id, session_id, directory or "")
         return
 
@@ -395,19 +397,22 @@ async def _finish_status(app: Application, session_id: str):
             kbd = InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Ignorar", callback_data="cancel:")
             ]])
+        # Convert LLM markdown to Telegram MarkdownV2
+        tg_chunk = md2tgv2.convert(chunk)
         try:
             last_sent = await app.bot.send_message(
                 ADMIN_ID,
-                f"{header}{chunk}",
-                parse_mode="Markdown",
+                f"{header}{tg_chunk}",
+                parse_mode="MarkdownV2",
                 reply_markup=kbd,
             )
-        except BadRequest:
-            # Fallback: send as plain text if Markdown parsing fails
+        except BadRequest as e:
+            logger.warning(f"MarkdownV2 parse failed ({e}), sending as plain text")
+            # Fallback: send raw text without any parse mode
             try:
                 last_sent = await app.bot.send_message(
                     ADMIN_ID,
-                    f"{header}{chunk}",
+                    f"{header_line}\n{chunk}" if i == 0 else chunk,
                     reply_markup=kbd,
                 )
             except Exception as exc2:
