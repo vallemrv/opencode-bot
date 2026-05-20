@@ -393,10 +393,6 @@ async def _finish_status(app: Application, session_id: str):
     for i, chunk in enumerate(chunks):
         header = f"{header_line}\n" if i == 0 else ""
         kbd = None
-        if i == len(chunks) - 1 and reply_text.rstrip().endswith("?"):
-            kbd = InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Ignorar", callback_data="cancel:")
-            ]])
         # Convert LLM markdown to Telegram MarkdownV2
         tg_chunk = md2tgv2.convert(chunk)
         try:
