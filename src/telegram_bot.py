@@ -301,6 +301,12 @@ async def _finish_status(app: Application, session_id: str):
         for job in app.job_queue.get_jobs_by_name("status_heartbeat"):
             job.schedule_removal()
 
+    # clean up any child→parent mappings for this parent
+    child_map = app.bot_data.get("child_to_parent", {})
+    dead_children = [c for c, p in list(child_map.items()) if p == session_id]
+    for c in dead_children:
+        child_map.pop(c, None)
+
     if st and st.get("msg_id"):
         await _delete_msg(app.bot, ADMIN_ID, st["msg_id"])
 
@@ -385,6 +391,26 @@ async def _finish_status(app: Application, session_id: str):
     if not reply_text:
         sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo\\._", parse_mode="MarkdownV2")
         _track_msg(app, sent.message_id, session_id, directory or "")
+        return
+
+    # Long responses → send as respuesta.md file to avoid flooding
+    MD_FILE_THRESHOLD = 6000
+    if len(reply_text) > MD_FILE_THRESHOLD:
+        import io
+        md_bytes = reply_text.encode("utf-8")
+        md_file  = io.BytesIO(md_bytes)
+        md_file.name = "respuesta.md"
+        try:
+            last_sent = await app.bot.send_document(
+                ADMIN_ID,
+                document=md_file,
+                caption=header_line,
+                parse_mode="MarkdownV2",
+            )
+            _track_msg(app, last_sent.message_id, session_id, directory or "")
+        except Exception as exc:
+            logger.error(f"Failed to send respuesta.md: {exc}")
+        await _drain_queue(app, session_id)
         return
 
     chunk_size = 3900
@@ -598,15 +624,46 @@ async def sse_listener(app: Application) -> None:
                 continue
 
             statuses = app.bot_data.setdefault("statuses", {})
-            st = statuses.get(sid)
+
+            # ---- resolve child sessions to their parent ----
+            # If this sid is a known child, route its events to the parent status.
+            # If it's unknown, check with OpenCode whether it has a parentID.
+            child_map = app.bot_data.setdefault("child_to_parent", {})
+            effective_sid = sid  # the sid whose status entry we'll update
+
+            if sid not in statuses:
+                # Could be a child session we haven't seen yet
+                if sid in child_map:
+                    effective_sid = child_map[sid]
+                else:
+                    # Ask OpenCode if this session has a parent
+                    try:
+                        sess_info = await oc.get_session(sid)
+                        parent_id = sess_info.get("parentID") or ""
+                        if parent_id:
+                            child_map[sid] = parent_id
+                            effective_sid  = parent_id
+                            logger.info(f"Child session {sid[:12]} → parent {parent_id[:12]}")
+                    except Exception:
+                        pass
+
+            st = statuses.get(effective_sid)
 
             # ---- session status ----
             if etype == "session.status":
                 status     = props.get("status", {})
                 state_type = status.get("type", "idle")
+                is_child   = (sid != effective_sid)  # True if this event is from a child session
 
                 if state_type in ("busy", "retry"):
                     if not st:
+                        # Child sessions never create their own status entry
+                        if is_child:
+                            continue
+                        # Only track sessions that are the active session for this bot
+                        active_check = db.get_active()
+                        if not active_check or active_check.get("session_id") != sid:
+                            continue
                         # Session just started processing — create status msg
                         try:
                             sess_info = await oc.get_session(sid)
@@ -644,16 +701,22 @@ async def sse_listener(app: Application) -> None:
                         st["state"] = "busy"
                         if state_type == "retry":
                             st["last_text"] = status.get("message", "Retrying...")
-                        await _update_status_now(app, sid, force=True)
+                        await _update_status_now(app, effective_sid, force=True)
 
                 elif state_type == "idle":
+                    # Child going idle → don't finish, parent will do it
+                    if is_child:
+                        continue
                     if st:
-                        await _finish_status(app, sid)
+                        await _finish_status(app, effective_sid)
                 continue
 
             if etype == "session.idle":
+                # Child going idle → ignore, parent will fire its own idle
+                if sid != effective_sid:
+                    continue
                 if st:
-                    await _finish_status(app, sid)
+                    await _finish_status(app, effective_sid)
                 continue
 
             if etype == "session.error":
@@ -661,13 +724,13 @@ async def sse_listener(app: Application) -> None:
                     error     = props.get("error", {})
                     error_msg = error.get("data", {}).get("message", str(error))
                     st["state"] = "error"
-                    await _update_status_now(app, sid, force=True)
+                    await _update_status_now(app, effective_sid, force=True)
                     await app.bot.send_message(
                         ADMIN_ID,
                         f"❌ *Error* `{sid[:12]}`:\n{error_msg}",
                         parse_mode="Markdown",
                     )
-                    await _finish_status(app, sid)
+                    await _finish_status(app, effective_sid)
                 continue
 
             # ---- permission request (OpenCode asks for approval) ----
@@ -776,14 +839,14 @@ async def sse_listener(app: Application) -> None:
                         # as the authoritative final_text for this step
                         st["last_text"]  = text
                         st["final_text"] = text
-                    await _update_status_now(app, sid)
+                    await _update_status_now(app, effective_sid)
 
                 elif part_type == "reasoning":
                     st["state"] = "thinking"
                     text = part.get("text", "")
                     if text:
                         st["reasoning_text"] = text
-                    await _update_status_now(app, sid)
+                    await _update_status_now(app, effective_sid)
 
                 elif part_type in ("tool-call", "tool"):
                     st["state"] = "busy"
@@ -800,7 +863,7 @@ async def sse_listener(app: Application) -> None:
                                      tool_input.get("filePath") or tool_input.get("target_file", ""))
                             if fpath:
                                 st["files_edited"].add(Path(fpath).name)
-                    await _update_status_now(app, sid, force=True)
+                    await _update_status_now(app, effective_sid, force=True)
 
                 elif part_type == "patch":
                     files = part.get("files", [])
@@ -820,7 +883,7 @@ async def sse_listener(app: Application) -> None:
                     st["state"]      = "busy"
                     st["last_text"]  = (st.get("last_text") or "") + delta
                     st["final_text"] = (st.get("final_text") or "") + delta
-                    await _update_status_now(app, sid)
+                    await _update_status_now(app, effective_sid)
                 continue
 
             if etype == "message.updated":
@@ -831,7 +894,7 @@ async def sse_listener(app: Application) -> None:
                         st["tokens_input"]  = tokens.get("input", 0)
                         st["tokens_output"] = tokens.get("output", 0)
                     st["message_count"] = st.get("message_count", 0) + 1
-                    await _update_status_now(app, sid)
+                    await _update_status_now(app, effective_sid)
                 continue
 
         except asyncio.CancelledError:
@@ -942,26 +1005,68 @@ async def cb_os(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def _show_session_picker(q, ctx, cwd: str, sessions: list[dict]):
-    """Show existing sessions for this project + option to create new one."""
+    """Show existing sessions for this project + option to create new one.
+
+    Sessions are displayed in parent→child hierarchy. Child sessions
+    (those with parentID set) are shown indented under their parent.
+    Deleting a parent also deletes all its children (OpenCode behaviour),
+    so the UI makes this visible.
+    """
     cwd_path = Path(cwd)
     pk = _key(ctx, cwd)
     active = db.get_active()
     active_sid = (active or {}).get("session_id")
 
+    # Build parent→children map
+    by_id    = {s["id"]: s for s in sessions}
+    children_map: dict[str, list] = defaultdict(list)
+    roots    = []
+    for s in sessions:
+        pid = s.get("parentID")
+        if pid and pid in by_id:
+            children_map[pid].append(s)
+        else:
+            roots.append(s)
+
+    # Flatten into ordered list with depth info (max 2 levels shown)
+    ordered: list[tuple[dict, int]] = []
+    def _add(s, depth):
+        ordered.append((s, depth))
+        for child in children_map.get(s["id"], []):
+            _add(child, depth + 1)
+    for s in roots:
+        _add(s, 0)
+
     btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"newsess:{pk}")]]
-    for s in sessions[:8]:
+    for s, depth in ordered[:10]:
         sid   = s.get("id", "")
         title = s.get("title") or sid[:12]
         mark  = " ✅" if sid == active_sid else ""
-        sk    = _key(ctx, sid)
+        n_kids = len(children_map.get(sid, []))
+        # Visual indicators
+        prefix = "  └ " if depth > 0 else ""
+        kids_warn = f" [{n_kids}↓]" if n_kids else ""
+        sk = _key(ctx, sid)
         btns.append([
-            InlineKeyboardButton(f"{title[:22]}{mark}", callback_data=f"actsess:{sk}:{pk}"),
+            InlineKeyboardButton(
+                f"{prefix}{title[:20]}{kids_warn}{mark}",
+                callback_data=f"actsess:{sk}:{pk}",
+            ),
             InlineKeyboardButton("🗑", callback_data=f"delsess:{sk}:{pk}"),
         ])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
+    total = len(sessions)
+    roots_count = len(roots)
+    child_count = total - roots_count
+    detail = f"{roots_count} raíz"
+    if child_count:
+        detail += f" + {child_count} fork{'s' if child_count != 1 else ''}"
+
     await q.edit_message_text(
-        f"📂 `{cwd_path.name}` — {len(sessions)} sesiones",
+        f"📂 `{cwd_path.name}` — {total} sesiones ({detail})\n"
+        f"_\\[N↓\\] = sesiones hijas que se borrarán en cascada_" if child_count else
+        f"📂 `{cwd_path.name}` — {total} sesiones",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -1159,13 +1264,51 @@ async def cb_actsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Delete a session and refresh the session picker."""
+    """Delete a session — if it has children, ask for confirmation first."""
     q = update.callback_query; await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     pk    = int(parts[2]) if len(parts) > 2 else None
     cwd   = _val(ctx, pk) if pk is not None else ""
 
+    # Check if this session has children before deleting
+    children = await oc.get_session_children(sid, directory=cwd or None)
+    if children:
+        # Warn user: deleting this will cascade to all children
+        sk = _key(ctx, sid)
+        n  = len(children)
+        child_titles = ", ".join(
+            f"`{c.get('title') or c['id'][:8]}`" for c in children[:3]
+        )
+        if n > 3:
+            child_titles += f" y {n-3} más"
+        await q.edit_message_text(
+            f"⚠️ *Esta sesión tiene {n} hijo{'s' if n != 1 else ''}*\n\n"
+            f"Si la borras, también se borrarán: {child_titles}\n\n"
+            f"¿Confirmar borrado en cascada?",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"🗑 Borrar todo ({n+1} sesiones)", callback_data=f"delconfirm:{sk}:{pk or 0}")],
+                [InlineKeyboardButton("❌ Cancelar", callback_data=f"os:{pk or 0}")],
+            ]),
+            parse_mode="Markdown",
+        )
+        return
+
+    await _do_delete_session(q, ctx, sid, cwd, pk)
+
+
+async def cb_delconfirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Confirmed deletion of a session with children."""
+    q = update.callback_query; await q.answer()
+    parts = q.data.split(":")
+    sid   = _val(ctx, int(parts[1]))
+    pk    = int(parts[2]) if len(parts) > 2 else None
+    cwd   = _val(ctx, pk) if pk is not None else ""
+    await _do_delete_session(q, ctx, sid, cwd, pk)
+
+
+async def _do_delete_session(q, ctx, sid: str, cwd: str, pk):
+    """Actually delete a session and refresh the picker."""
     try:
         await oc.delete_session(sid, directory=cwd or None)
     except Exception as exc:
@@ -1187,11 +1330,11 @@ async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if sessions:
             await _show_session_picker(q, ctx, cwd, sessions)
         else:
-            pk = _key(ctx, cwd)
+            pk_key = _key(ctx, cwd)
             await q.edit_message_text(
                 f"✅ Sesión borrada. No quedan sesiones en `{Path(cwd).name}`.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("➕ Nueva sesión", callback_data=f"newsess:{pk}")],
+                    [InlineKeyboardButton("➕ Nueva sesión", callback_data=f"newsess:{pk_key}")],
                     [InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")],
                 ]),
                 parse_mode="Markdown",
@@ -2092,19 +2235,35 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         directory = target["directory"]
     cwd_name = Path(directory).name or "?"
 
-    # If session is currently busy, queue the message locally and notify
+    # If session is currently busy, queue the message locally and notify.
+    # We double-check with the server to avoid stale statuses (e.g. lost SSE events).
     statuses = ctx.bot_data.get("statuses", {})
     if sid in statuses:
-        queues = ctx.bot_data.setdefault("queues", {})
-        q = queues.setdefault(sid, deque())
-        q.append({"text": text, "directory": directory})
-        pos = len(q)
-        await update.message.reply_text(
-            f"⏳ `{cwd_name}` ocupado. Mensaje encolado (posición {pos}).\n"
-            f"Se enviará cuando OpenCode termine la tarea actual.",
-            parse_mode="Markdown",
-        )
-        return
+        # Verify the server actually thinks the session is still busy
+        server_busy = True
+        try:
+            sess_info  = await oc.get_session(sid, directory=directory)
+            srv_status = sess_info.get("status") or {}
+            srv_type   = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
+            if srv_type not in ("busy", "retry"):
+                # Server says idle — our status is stale, clean it up
+                server_busy = False
+                logger.info(f"Stale status for {sid[:12]}, server is {srv_type!r} — clearing")
+                await _finish_status(ctx.application, sid)
+        except Exception:
+            pass  # If we can't reach the server, assume busy (safe default)
+
+        if server_busy:
+            queues = ctx.bot_data.setdefault("queues", {})
+            q = queues.setdefault(sid, deque())
+            q.append({"text": text, "directory": directory})
+            pos = len(q)
+            await update.message.reply_text(
+                f"⏳ `{cwd_name}` ocupado. Mensaje encolado (posición {pos}).\n"
+                f"Se enviará cuando OpenCode termine la tarea actual.",
+                parse_mode="Markdown",
+            )
+            return
 
     if not await _server_ok(update.message.reply_text):
         return
@@ -2378,7 +2537,8 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_provmodel, pattern=r"^provmodel:"))
     app.add_handler(CallbackQueryHandler(cb_newsess,   pattern=r"^newsess:"))
     app.add_handler(CallbackQueryHandler(cb_actsess,   pattern=r"^actsess:"))
-    app.add_handler(CallbackQueryHandler(cb_delsess,   pattern=r"^delsess:"))
+    app.add_handler(CallbackQueryHandler(cb_delsess,    pattern=r"^delsess:"))
+    app.add_handler(CallbackQueryHandler(cb_delconfirm, pattern=r"^delconfirm:"))
     app.add_handler(CallbackQueryHandler(cb_closedir,  pattern=r"^closedir:"))
     app.add_handler(CallbackQueryHandler(cb_closedel,  pattern=r"^closedel:"))
     app.add_handler(CallbackQueryHandler(cb_closebot,  pattern=r"^closebot:"))

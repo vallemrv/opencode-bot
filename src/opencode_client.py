@@ -123,15 +123,17 @@ class OpenCodeClient:
     #  Sessions                                                            #
     # ------------------------------------------------------------------ #
 
-    async def list_sessions(self, directory: str | None = None) -> list[dict]:
+    async def list_sessions(self, directory: str | None = None, roots: bool = False) -> list[dict]:
         """
         List sessions. If directory is given, scoped to that project.
+        If roots=True, only returns top-level sessions (no children/forks).
         If not, fetches all projects and aggregates sessions from each one,
         because the bare /session endpoint only returns sessions for the
         server's own project.
         """
         if directory:
-            return await self._get("/session", directory=directory)
+            path = "/session?roots=true" if roots else "/session"
+            return await self._get(path, directory=directory)
         # Aggregate across all known projects
         try:
             projects = await self._get("/project")
@@ -146,10 +148,11 @@ class OpenCodeClient:
         worktrees = list(wt_to_pid.keys())
         all_sessions: list[dict] = []
         seen_ids: set[str] = set()
+        sess_path = "/session?roots=true" if roots else "/session"
         for wt in worktrees:
             pid = wt_to_pid[wt]
             try:
-                sessions = await self._get("/session", directory=wt)
+                sessions = await self._get(sess_path, directory=wt)
                 for s in sessions:
                     sid = s.get("id", "")
                     # Skip sessions that belong to a different project (e.g. global leaking in)
@@ -165,7 +168,7 @@ class OpenCodeClient:
         if not all_sessions:
             # Last resort: bare call
             try:
-                bare = await self._get("/session")
+                bare = await self._get(sess_path)
                 for s in bare:
                     sid = s.get("id", "")
                     if sid and sid not in seen_ids:
@@ -176,7 +179,7 @@ class OpenCodeClient:
         else:
             # Also merge bare sessions in case some projects aren't in /project list
             try:
-                bare = await self._get("/session")
+                bare = await self._get(sess_path)
                 for s in bare:
                     sid = s.get("id", "")
                     if sid and sid not in seen_ids:
@@ -185,6 +188,13 @@ class OpenCodeClient:
             except Exception:
                 pass
         return all_sessions
+
+    async def get_session_children(self, session_id: str, directory: str | None = None) -> list[dict]:
+        """Return child sessions of a given session."""
+        try:
+            return await self._get(f"/session/{session_id}/children", directory=directory)
+        except Exception:
+            return []
 
     async def get_session(self, session_id: str, directory: str | None = None) -> dict:
         return await self._get(f"/session/{session_id}", directory=directory)
