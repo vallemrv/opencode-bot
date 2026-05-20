@@ -702,26 +702,18 @@ async def sse_listener(app: Application) -> None:
 
             # ---- streaming parts ----
             if etype == "message.part.updated":
-                part      = props.get("part", {})
-                part_type = part.get("type", "")
-                logger.info(f"SSE message.part.updated type={part_type} keys={list(part.keys())}")
-
                 if not st:
                     continue
+                part      = props.get("part", {})
+                part_type = part.get("type", "")
 
-                elif part_type == "patch":
-                    # patch event lists all files modified in this step
-                    if st:
-                        files = part.get("files", [])
-                        for f in files:
-                            fname = Path(f).name if f else ""
-                            if fname:
-                                st["files_edited"].add(fname)
-                    continue
+                if part_type == "step-start":
+                    # New step: reset accumulated text so steps don't bleed into each other
+                    st["last_text"]  = None
+                    st["final_text"] = None
+                    st["tool"]       = None
 
-                continue
-
-                if part_type == "text":
+                elif part_type == "text":
                     st["state"] = "busy"
                     text = part.get("text", "")
                     if text:
@@ -738,15 +730,12 @@ async def sse_listener(app: Application) -> None:
 
                 elif part_type in ("tool-call", "tool"):
                     st["state"] = "busy"
-                    # Support both SSE shapes: {name, input} and {tool, state:{input}}
-                    tool_name = part.get("name") or part.get("tool", "")
+                    tool_name  = part.get("name") or part.get("tool", "")
                     tool_input = part.get("input") or (part.get("state") or {}).get("input") or {}
-                    logger.info(f"SSE tool part type={part_type} name={tool_name} input_keys={list(tool_input.keys()) if tool_input else []}")
                     if tool_name:
                         st["tool"] = tool_name
                         if tool_name not in st["tools_seen"]:
                             st["tools_seen"].append(tool_name)
-                        # Track file edits from write/edit tools
                         EDIT_TOOLS = {"write", "edit", "patch", "fs_write", "str_replace_editor",
                                       "str_replace_based_edit_tool", "create_file", "write_file"}
                         if tool_name.lower() in EDIT_TOOLS or "write" in tool_name.lower() or "edit" in tool_name.lower():
@@ -755,12 +744,22 @@ async def sse_listener(app: Application) -> None:
                             if fpath:
                                 st["files_edited"].add(Path(fpath).name)
                     await _update_status_now(app, sid, force=True)
+
+                elif part_type == "patch":
+                    files = part.get("files", [])
+                    for f in files:
+                        fname = Path(f).name if f else ""
+                        if fname:
+                            st["files_edited"].add(fname)
+
                 continue
 
             if etype == "message.part.delta":
+                if not st:
+                    continue
                 field = props.get("field", "")
                 delta = props.get("delta", "")
-                if field == "text" and delta and st:
+                if field == "text" and delta:
                     st["state"]      = "busy"
                     st["last_text"]  = (st.get("last_text") or "") + delta
                     st["final_text"] = (st.get("final_text") or "") + delta
