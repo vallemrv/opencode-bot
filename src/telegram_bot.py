@@ -309,8 +309,20 @@ async def _finish_status(app: Application, session_id: str):
         model_obj    = session_data.get("model") or {}
         provider_id  = model_obj.get("providerID", "")
         model_id     = model_obj.get("id", "")
-        tokens_obj   = session_data.get("tokens") or {}
-        total_tokens = tokens_obj.get("input", 0) or 0
+
+        # Get tokens from the last assistant message
+        total_tokens = 0
+        try:
+            messages = await oc.get_messages(session_id, directory=directory)
+            for m in reversed(messages):
+                info = m.get("info", {})
+                if info.get("role") == "assistant":
+                    tok = info.get("tokens", {}) or {}
+                    cache = tok.get("cache", {}) or {}
+                    total_tokens = (tok.get("input", 0) or 0) + (cache.get("read", 0) or 0) + (cache.get("write", 0) or 0)
+                    break
+        except Exception:
+            pass
 
         model_label = model_id or ""
         ctx_str = ""
