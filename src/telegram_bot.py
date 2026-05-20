@@ -567,6 +567,10 @@ async def sse_listener(app: Application) -> None:
                         _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
                         _track_msg(app, status_msg.message_id, sid, directory)
                         st = app.bot_data["statuses"].get(sid)
+                        # Delete the "Enviado a..." placeholder if present
+                        pending_sent = app.bot_data.get("pending_sent_msgs", {}).pop(sid, None)
+                        if pending_sent:
+                            await _delete_msg(app.bot, ADMIN_ID, pending_sent)
 
                     if st:
                         st["state"] = "busy"
@@ -2030,6 +2034,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
     )
     _track_msg(ctx.application, sent.message_id, sid, directory)
+    # Store so it can be deleted when the status message appears
+    ctx.bot_data.setdefault("pending_sent_msgs", {})[sid] = sent.message_id
 
 
 # ---------------------------------------------------------------------------
