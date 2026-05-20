@@ -265,11 +265,14 @@ class OpenCodeClient:
     # ------------------------------------------------------------------ #
 
     async def list_models(self) -> list[dict]:
-        """Return flat list of models from /provider endpoint."""
+        """Return flat list of models from connected providers only."""
         data = await self._get("/provider")
+        connected = set(data.get("connected", []))
         models = []
         for provider in data.get("all", []):
             pid = provider.get("id", "")
+            if connected and pid not in connected:
+                continue
             for mid, model in provider.get("models", {}).items():
                 models.append({**model, "providerID": pid, "id": mid})
         return models
