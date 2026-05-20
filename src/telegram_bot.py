@@ -1932,6 +1932,11 @@ async def handle_audio_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if grok_stt.is_configured():
         status_msg = await msg.reply_text("🎙️ Transcribiendo audio con Grok...")
         transcribed = await grok_stt.transcribe(str(final_path))
+        # Delete audio file after transcription (voice notes, not kept)
+        try:
+            final_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         if transcribed:
             if active and active.get("session_id"):
                 sid      = active["session_id"]
