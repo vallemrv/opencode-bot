@@ -1410,26 +1410,12 @@ async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     questions   = q_data["questions"]
     n_questions = len(questions)
 
-    # Record answer for this question slot
+    # Record answer and send immediately — each question.asked event has
+    # exactly one question in practice; the multi-question array is unused.
     q_data["answers"][q_idx] = [label]
-
-    unanswered = sum(1 for a in q_data["answers"] if a is None)
-
-    if unanswered == 0:
-        # All questions answered — send now
-        await q.edit_message_text(f"✅ *{label}*", parse_mode="Markdown")
-        await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
-    else:
-        # More questions pending — confirm this one and add "Send now" button
-        rk_val = _key(ctx, req_id)
-        sk_val = _key(ctx, session_id)
-        await q.edit_message_text(
-            f"✅ *{label}* — quedan {unanswered} pregunta{'s' if unanswered != 1 else ''} por responder.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📨 Enviar ya (ignorar resto)", callback_data=f"qsendnow:{rk_val}:{sk_val}"),
-            ]]),
-        )
+    filled = [a if a is not None else [] for a in q_data["answers"]]
+    await q.edit_message_text(f"✅ *{label}*", parse_mode="Markdown")
+    await _send_question_answer(ctx.application, req_id, session_id, filled)
 
 
 async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2267,19 +2253,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             q_data     = pending.get(req_id)
             if q_data:
                 q_data["answers"][q_idx] = [text]
-                unanswered = sum(1 for a in q_data["answers"] if a is None)
-                if unanswered == 0:
-                    await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
-                    await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
-                else:
-                    rk_val = _key(ctx, req_id)
-                    sk_val = _key(ctx, session_id)
-                    await update.message.reply_text(
-                        f"✅ Pregunta {q_idx+1} respondida. Quedan {unanswered} por responder.",
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("📨 Enviar ya (ignorar resto)", callback_data=f"qsendnow:{rk_val}:{sk_val}"),
-                        ]]),
-                    )
+                filled = [a if a is not None else [] for a in q_data["answers"]]
+                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+                await _send_question_answer(ctx.application, req_id, session_id, filled)
             else:
                 await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
             return
