@@ -1208,13 +1208,26 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         title       = sess.get("title") or sid[:12]
         model_label = f"{pid}/{mid}" if pid and mid else (pid or "default")
         db.set_active(sid, cwd)
-        await q.edit_message_text(
-            f"✅ Sesión creada\n"
-            f"📦 `{title}`\n"
-            f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
-            f"Envía tu primer prompt.",
-            parse_mode="Markdown",
-        )
+
+        # If this session was created from the /send flow, set send_target and prompt for text
+        send_new_dir = ctx.bot_data.pop("send_new_sess_dir", None)
+        if send_new_dir and Path(send_new_dir).resolve() == Path(cwd).resolve():
+            ctx.bot_data["send_target"] = {"session_id": sid, "directory": cwd}
+            await q.edit_message_text(
+                f"✅ Sesión creada\n"
+                f"📦 `{title}`\n"
+                f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
+                f"Escribe el prompt:",
+                parse_mode="Markdown",
+            )
+        else:
+            await q.edit_message_text(
+                f"✅ Sesión creada\n"
+                f"📦 `{title}`\n"
+                f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
+                f"Envía tu primer prompt.",
+                parse_mode="Markdown",
+            )
 
 
 async def cb_newsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2183,41 +2196,63 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     # Pending custom permission response?
-    perm_input = ctx.bot_data.pop("perm_input", None)
+    perm_input = ctx.bot_data.get("perm_input")
     if perm_input:
-        sid       = perm_input["session_id"]
-        perm_id   = perm_input["perm_id"]
-        directory = perm_input["directory"]
-        try:
-            await oc.respond_permission(sid, perm_id, text, remember=False, directory=directory or None)
-            await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
-        except Exception as exc:
-            await update.message.reply_text(f"❌ Error al responder permiso: {exc}")
-        ctx.bot_data.get("pending_perms", {}).pop(perm_id, None)
-        return
+        # Only consume if the user is NOT replying to a different session's message
+        reply = update.message.reply_to_message
+        is_reply_to_other = False
+        if reply and reply.from_user and reply.from_user.is_bot:
+            store = ctx.bot_data.get("msg_to_session", {})
+            target_info = store.get(reply.message_id)
+            if target_info and target_info.get("session_id") != perm_input["session_id"]:
+                is_reply_to_other = True
+
+        if not is_reply_to_other:
+            ctx.bot_data.pop("perm_input", None)
+            sid       = perm_input["session_id"]
+            perm_id   = perm_input["perm_id"]
+            directory = perm_input["directory"]
+            try:
+                await oc.respond_permission(sid, perm_id, text, remember=False, directory=directory or None)
+                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+            except Exception as exc:
+                await update.message.reply_text(f"❌ Error al responder permiso: {exc}")
+            ctx.bot_data.get("pending_perms", {}).pop(perm_id, None)
+            return
 
     # Pending custom question answer?
-    q_custom = ctx.bot_data.pop("question_custom_input", None)
+    q_custom = ctx.bot_data.get("question_custom_input")
     if q_custom:
-        req_id     = q_custom["req_id"]
-        session_id = q_custom["session_id"]
-        q_idx      = q_custom["q_idx"]
-        pending    = ctx.bot_data.get("pending_questions", {})
-        q_data     = pending.get(req_id)
-        if q_data:
-            q_data["answers"][q_idx] = [text]
-            if all(a is not None for a in q_data["answers"]):
-                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
-                await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
+        # Only consume if the user is NOT replying to a different session's message
+        reply = update.message.reply_to_message
+        is_reply_to_other = False
+        if reply and reply.from_user and reply.from_user.is_bot:
+            store = ctx.bot_data.get("msg_to_session", {})
+            target_info = store.get(reply.message_id)
+            if target_info and target_info.get("session_id") != q_custom["session_id"]:
+                is_reply_to_other = True
+
+        if not is_reply_to_other:
+            ctx.bot_data.pop("question_custom_input", None)
+            req_id     = q_custom["req_id"]
+            session_id = q_custom["session_id"]
+            q_idx      = q_custom["q_idx"]
+            pending    = ctx.bot_data.get("pending_questions", {})
+            q_data     = pending.get(req_id)
+            if q_data:
+                q_data["answers"][q_idx] = [text]
+                if all(a is not None for a in q_data["answers"]):
+                    await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+                    await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
+                else:
+                    n = len(q_data["questions"])
+                    await update.message.reply_text(
+                        f"✅ Pregunta {q_idx+1}/{n} respondida: `{text}`\n\n_Responde las demás preguntas._",
+                        parse_mode="Markdown",
+                    )
             else:
-                n = len(q_data["questions"])
-                await update.message.reply_text(
-                    f"✅ Pregunta {q_idx+1}/{n} respondida: `{text}`\n\n_Responde las demás preguntas._",
-                    parse_mode="Markdown",
-                )
-        else:
-            await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
-        return
+                await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
+            return
 
     # /send flow: explicit target from picker takes highest priority
     send_target = ctx.bot_data.pop("send_target", None)
@@ -2408,7 +2443,7 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    btns = []
+    btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"sendnewsess:{dk}")]]
     for s in sessions[:8]:
         sid   = s.get("id", "")
         title = s.get("title") or sid[:12]
@@ -2444,6 +2479,18 @@ async def cb_sendsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"📂 `{Path(directory).name}` · `{title}`\n\nEscribe el prompt:",
         parse_mode="Markdown",
     )
+
+
+async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Nueva sesión desde el picker de /send → muestra selector de proveedor/modelo."""
+    q = update.callback_query; await q.answer()
+    dk        = int(q.data.split(":")[1])
+    directory = _val(ctx, dk)
+
+    # Reuse provider picker; pk == dk (cwd key), after creation send_target will be set
+    # We store the send context so cb_provmodel knows to set send_target instead of active
+    ctx.bot_data["send_new_sess_dir"] = directory
+    await _show_provider_picker(q, ctx, directory)
 
 
 # ---------------------------------------------------------------------------
@@ -2552,8 +2599,9 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_qans,      pattern=r"^qans:"))
     app.add_handler(CallbackQueryHandler(cb_qcustom,   pattern=r"^qcustom:"))
     app.add_handler(CallbackQueryHandler(cb_qreject,   pattern=r"^qreject:"))
-    app.add_handler(CallbackQueryHandler(cb_sendpick,  pattern=r"^sendpick:"))
-    app.add_handler(CallbackQueryHandler(cb_sendsess,  pattern=r"^sendsess:"))
+    app.add_handler(CallbackQueryHandler(cb_sendpick,    pattern=r"^sendpick:"))
+    app.add_handler(CallbackQueryHandler(cb_sendsess,    pattern=r"^sendsess:"))
+    app.add_handler(CallbackQueryHandler(cb_sendnewsess, pattern=r"^sendnewsess:"))
     app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
     app.add_handler(CallbackQueryHandler(cb_modpick,   pattern=r"^modpick:"))
     app.add_handler(CallbackQueryHandler(cb_modsess,   pattern=r"^modsess:"))
