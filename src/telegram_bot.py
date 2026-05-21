@@ -949,6 +949,7 @@ def _folder_kbd(ctx, path: Path, page: int):
         btns.append(nav)
 
     btns.append([InlineKeyboardButton("✅ Open here", callback_data=f"os:{pk}")])
+    btns.append([InlineKeyboardButton("📁 Nueva carpeta", callback_data=f"mkdir:{pk}")])
     parent = path.parent
     if parent != path:
         btns.append([InlineKeyboardButton("⬆ Up", callback_data=f"ob:{_key(ctx,str(parent))}:0")])
@@ -987,6 +988,18 @@ async def cb_ob(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         path = path.parent
     txt, kbd = _folder_kbd(ctx, path, int(pg))
     await q.edit_message_text(txt, reply_markup=kbd, parse_mode="Markdown")
+
+
+async def cb_mkdir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """User pressed 'Nueva carpeta' — ask for the folder name."""
+    q = update.callback_query; await q.answer()
+    pk   = int(q.data.split(":")[1])
+    path = _val(ctx, pk)
+    ctx.bot_data["mkdir_pending"] = {"path": path, "msg_id": q.message.message_id}
+    await q.edit_message_text(
+        f"📁 Nueva carpeta en `{Path(path).name}`\n\nEscribe el nombre:",
+        parse_mode="Markdown",
+    )
 
 
 async def cb_os(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2213,6 +2226,35 @@ async def handle_audio_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
+    # Pending mkdir?
+    mkdir_pending = ctx.bot_data.pop("mkdir_pending", None)
+    if mkdir_pending:
+        parent_path = Path(mkdir_pending["path"])
+        new_dir     = parent_path / text.strip()
+        try:
+            new_dir.mkdir(parents=False, exist_ok=False)
+        except FileExistsError:
+            await update.message.reply_text(f"⚠️ Ya existe `{text}`.", parse_mode="Markdown")
+            # Restore so user can try again or navigate
+            txt, kbd = _folder_kbd(ctx, parent_path, 0)
+            await ctx.bot.edit_message_text(
+                chat_id=ADMIN_ID, message_id=mkdir_pending["msg_id"],
+                text=txt, reply_markup=kbd, parse_mode="Markdown",
+            )
+            return
+        except Exception as exc:
+            await update.message.reply_text(f"❌ Error al crear carpeta: {exc}")
+            return
+        # Navigate into the new folder
+        pk  = _key(ctx, str(new_dir))
+        txt, kbd = _folder_kbd(ctx, new_dir, 0)
+        await ctx.bot.edit_message_text(
+            chat_id=ADMIN_ID, message_id=mkdir_pending["msg_id"],
+            text=txt, reply_markup=kbd, parse_mode="Markdown",
+        )
+        await update.message.reply_text(f"✅ Carpeta `{text}` creada.", parse_mode="Markdown")
+        return
+
     # Pending custom permission response?
     perm_input = ctx.bot_data.get("perm_input")
     if perm_input:
@@ -2594,6 +2636,7 @@ def main():
     app.add_handler(CommandHandler("send",     cmd_send))
 
     app.add_handler(CallbackQueryHandler(cb_ob,        pattern=r"^ob:"))
+    app.add_handler(CallbackQueryHandler(cb_mkdir,     pattern=r"^mkdir:"))
     app.add_handler(CallbackQueryHandler(cb_os,        pattern=r"^os:"))
     app.add_handler(CallbackQueryHandler(cb_prov,      pattern=r"^prov:"))
     app.add_handler(CallbackQueryHandler(cb_provmodel, pattern=r"^provmodel:"))
