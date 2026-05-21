@@ -1413,15 +1413,12 @@ async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Record answer for this question slot
     q_data["answers"][q_idx] = [label]
 
-    # Check if all questions have an answer
-    if all(a is not None for a in q_data["answers"]):
-        await q.edit_message_text(f"✅ Respuesta enviada: *{label}*", parse_mode="Markdown")
-        await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
-    else:
-        await q.edit_message_text(
-            f"✅ Pregunta {q_idx+1}/{n_questions} respondida: *{label}*\n\n_Responde las demás preguntas._",
-            parse_mode="Markdown",
-        )
+    # Send immediately — fill unanswered slots with [] (no selection)
+    filled_answers = [a if a is not None else [] for a in q_data["answers"]]
+    unanswered = sum(1 for a in q_data["answers"] if a is None)
+
+    await q.edit_message_text(f"✅ Respuesta enviada: *{label}*", parse_mode="Markdown")
+    await _send_question_answer(ctx.application, req_id, session_id, filled_answers)
 
 
 async def cb_qcustom(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2241,15 +2238,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             q_data     = pending.get(req_id)
             if q_data:
                 q_data["answers"][q_idx] = [text]
-                if all(a is not None for a in q_data["answers"]):
-                    await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
-                    await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
-                else:
-                    n = len(q_data["questions"])
-                    await update.message.reply_text(
-                        f"✅ Pregunta {q_idx+1}/{n} respondida: `{text}`\n\n_Responde las demás preguntas._",
-                        parse_mode="Markdown",
-                    )
+                filled_answers = [a if a is not None else [] for a in q_data["answers"]]
+                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+                await _send_question_answer(ctx.application, req_id, session_id, filled_answers)
             else:
                 await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
             return
