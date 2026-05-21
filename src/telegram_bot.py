@@ -1413,11 +1413,40 @@ async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Record answer for this question slot
     q_data["answers"][q_idx] = [label]
 
-    # Send immediately — fill unanswered slots with [] (no selection)
-    filled_answers = [a if a is not None else [] for a in q_data["answers"]]
     unanswered = sum(1 for a in q_data["answers"] if a is None)
 
-    await q.edit_message_text(f"✅ Respuesta enviada: *{label}*", parse_mode="Markdown")
+    if unanswered == 0:
+        # All questions answered — send now
+        await q.edit_message_text(f"✅ *{label}*", parse_mode="Markdown")
+        await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
+    else:
+        # More questions pending — confirm this one and add "Send now" button
+        rk_val = _key(ctx, req_id)
+        sk_val = _key(ctx, session_id)
+        await q.edit_message_text(
+            f"✅ *{label}* — quedan {unanswered} pregunta{'s' if unanswered != 1 else ''} por responder.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📨 Enviar ya (ignorar resto)", callback_data=f"qsendnow:{rk_val}:{sk_val}"),
+            ]]),
+        )
+
+
+async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """User wants to send with only the answered questions, ignoring the rest."""
+    q = update.callback_query; await q.answer()
+    parts      = q.data.split(":")
+    req_id     = _val(ctx, int(parts[1]))
+    session_id = _val(ctx, int(parts[2]))
+
+    pending = ctx.bot_data.get("pending_questions", {})
+    q_data  = pending.get(req_id)
+    if not q_data:
+        await q.edit_message_text("⚠️ Pregunta ya respondida o expirada.")
+        return
+
+    filled_answers = [a if a is not None else [] for a in q_data["answers"]]
+    await q.edit_message_text("📨 Enviando respuestas parciales...")
     await _send_question_answer(ctx.application, req_id, session_id, filled_answers)
 
 
@@ -2238,9 +2267,19 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             q_data     = pending.get(req_id)
             if q_data:
                 q_data["answers"][q_idx] = [text]
-                filled_answers = [a if a is not None else [] for a in q_data["answers"]]
-                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
-                await _send_question_answer(ctx.application, req_id, session_id, filled_answers)
+                unanswered = sum(1 for a in q_data["answers"] if a is None)
+                if unanswered == 0:
+                    await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+                    await _send_question_answer(ctx.application, req_id, session_id, q_data["answers"])
+                else:
+                    rk_val = _key(ctx, req_id)
+                    sk_val = _key(ctx, session_id)
+                    await update.message.reply_text(
+                        f"✅ Pregunta {q_idx+1} respondida. Quedan {unanswered} por responder.",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("📨 Enviar ya (ignorar resto)", callback_data=f"qsendnow:{rk_val}:{sk_val}"),
+                        ]]),
+                    )
             else:
                 await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
             return
@@ -2590,6 +2629,7 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_qans,      pattern=r"^qans:"))
     app.add_handler(CallbackQueryHandler(cb_qcustom,   pattern=r"^qcustom:"))
     app.add_handler(CallbackQueryHandler(cb_qreject,   pattern=r"^qreject:"))
+    app.add_handler(CallbackQueryHandler(cb_qsendnow,  pattern=r"^qsendnow:"))
     app.add_handler(CallbackQueryHandler(cb_sendpick,    pattern=r"^sendpick:"))
     app.add_handler(CallbackQueryHandler(cb_sendsess,    pattern=r"^sendsess:"))
     app.add_handler(CallbackQueryHandler(cb_sendnewsess, pattern=r"^sendnewsess:"))
