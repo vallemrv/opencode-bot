@@ -301,6 +301,9 @@ async def _finish_status(app: Application, session_id: str):
         for job in app.job_queue.get_jobs_by_name("status_heartbeat"):
             job.schedule_removal()
 
+    # clean up tracked_sessions entry
+    app.bot_data.get("tracked_sessions", set()).discard(session_id)
+
     # clean up any child→parent mappings for this parent
     child_map = app.bot_data.get("child_to_parent", {})
     dead_children = [c for c, p in list(child_map.items()) if p == session_id]
@@ -660,9 +663,12 @@ async def sse_listener(app: Application) -> None:
                         # Child sessions never create their own status entry
                         if is_child:
                             continue
-                        # Only track sessions that are the active session for this bot
+                        # Only track sessions we've sent a prompt to (active or via /send)
                         active_check = db.get_active()
-                        if not active_check or active_check.get("session_id") != sid:
+                        tracked = app.bot_data.get("tracked_sessions", set())
+                        is_active = active_check and active_check.get("session_id") == sid
+                        is_tracked = sid in tracked
+                        if not is_active and not is_tracked:
                             continue
                         # Session just started processing — create status msg
                         try:
@@ -2321,6 +2327,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as exc:
         await update.message.reply_text(f"❌ Error al enviar: {exc}")
         return
+
+    # Register this session so the SSE listener tracks it (not only the active one)
+    ctx.bot_data.setdefault("tracked_sessions", set()).add(sid)
 
     sent = await update.message.reply_text(
         f"📨 Enviado a `{cwd_name}` — esperando respuesta...",
