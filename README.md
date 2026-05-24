@@ -29,7 +29,15 @@ Bot de Telegram para controlar el servidor OpenCode remotamente.
 | `/send` | Enviar prompt a otro proyecto |
 | `/esc` | Cancelar tarea en curso |
 
-También puedes responder a mensajes del bot para continuar conversaciones específicas.
+## Conversaciones múltiples
+
+Puedes trabajar con varios proyectos simultáneamente:
+
+- **Reply a mensajes del bot** → continúa la conversación de esa sesión específica
+- **Texto sin reply** → envía a la sesión activa
+- **`/send`** → envía prompt a otro proyecto sin cambiar sesión activa
+
+Esto permite mantener múltiples conversaciones paralelas con diferentes proyectos desde el mismo chat.
 
 ## Requisitos
 
