@@ -1,0 +1,24 @@
+[Unit]
+Description=Telegram Bot - OpenCode Controller
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt
+
+Environment="PATH=/opt/opencode-bot/.venv/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/opt/opencode-bot/.env
+
+ExecStart=/opt/opencode-bot/.venv/bin/python3 /opt/opencode-bot/src/telegram_bot.py
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=opencode-bot
+
+[Install]
+WantedBy=multi-user.target

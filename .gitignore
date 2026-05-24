@@ -1,4 +1,5 @@
 .env
+opencode-bot.service
 bot.db
 config.json
 projects.json
