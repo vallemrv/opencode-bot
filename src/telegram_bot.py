@@ -2391,8 +2391,22 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
-# /projects — read-only overview of all projects with sessions
+# /send — send a prompt to a specific project's active session
 # ---------------------------------------------------------------------------
+
+RESTART_FLAG = Path("/tmp/opencode-bot-restarting.flag")
+
+@admin_only
+async def cmd_restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Restart opencode-bot.service with feedback."""
+    msg = await update.message.reply_text("🔄 *Reiniciando opencode-bot...*", parse_mode="Markdown")
+    
+    RESTART_FLAG.parent.mkdir(parents=True, exist_ok=True)
+    RESTART_FLAG.write_text(str(msg.message_id))
+    
+    import subprocess
+    subprocess.run(["sudo", "systemctl", "restart", "opencode-bot.service"])
+
 
 @admin_only
 async def cmd_projects(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2602,6 +2616,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
+            f"/restart — reiniciar el bot\n"
             f"/esc — cancelar la tarea en curso"
         )
     else:
@@ -2620,6 +2635,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
+            f"/restart — reiniciar el bot\n"
             f"/esc — cancelar la tarea en curso"
         )
 
@@ -2640,8 +2656,8 @@ def main():
     app.add_handler(CommandHandler("sessions", cmd_sessions))
     app.add_handler(CommandHandler("models",   cmd_models))
     app.add_handler(CommandHandler("esc",      cmd_esc))
-    app.add_handler(CommandHandler("projects", cmd_projects))
     app.add_handler(CommandHandler("send",     cmd_send))
+    app.add_handler(CommandHandler("restart",  cmd_restart))
 
     app.add_handler(CallbackQueryHandler(cb_ob,        pattern=r"^ob:"))
     app.add_handler(CallbackQueryHandler(cb_mkdir,     pattern=r"^mkdir:"))
@@ -2694,8 +2710,51 @@ def main():
             BotCommand("close",    "Cerrar proyecto"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),
+            BotCommand("restart",  "Reiniciar el bot"),
             BotCommand("esc",      "Cancelar tarea actual"),
         ])
+        
+        if RESTART_FLAG.exists():
+            try:
+                old_msg_id = int(RESTART_FLAG.read_text().strip())
+                RESTART_FLAG.unlink(missing_ok=True)
+                
+                active = db.get_active()
+                if active:
+                    sid       = active["session_id"]
+                    directory = active["directory"]
+                    cwd_name  = Path(directory).name
+                    
+                    session_title = sid[:12]
+                    model_label   = "default"
+                    try:
+                        sess_info   = await oc.get_session(sid, directory=directory)
+                        session_title = sess_info.get("title") or sid[:12]
+                        model_obj     = sess_info.get("model", {})
+                        if model_obj:
+                            model_label = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+                    except Exception:
+                        pass
+                    
+                    await application.bot.edit_message_text(
+                        chat_id=ADMIN_ID,
+                        message_id=old_msg_id,
+                        text=f"✅ *Bot reiniciado*\n\n"
+                             f"📂 `{cwd_name}`\n"
+                             f"📦 `{session_title}`\n"
+                             f"🧩 `{model_label}`",
+                        parse_mode="Markdown",
+                    )
+                else:
+                    await application.bot.edit_message_text(
+                        chat_id=ADMIN_ID,
+                        message_id=old_msg_id,
+                        text="✅ *Bot reiniciado*\n\n⚠️ Sin sesión activa",
+                        parse_mode="Markdown",
+                    )
+            except Exception as e:
+                logger.warning(f"Could not send restart notification: {e}")
+                RESTART_FLAG.unlink(missing_ok=True)
 
     app.post_init = post_init
 
