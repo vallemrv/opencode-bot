@@ -573,12 +573,20 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
             callback_data=f"qreject:{rk}:{sk}",
         )])
 
-        sent = await app.bot.send_message(
-            ADMIN_ID,
-            f"❓ *{header}*\n\n{question}",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(btns),
-        )
+        try:
+            sent = await app.bot.send_message(
+                ADMIN_ID,
+                f"❓ *{md2tgv2._escape(header)}*\n\n{md2tgv2._escape(question)}",
+                parse_mode="MarkdownV2",
+                reply_markup=InlineKeyboardMarkup(btns),
+            )
+        except Exception:
+            # Fallback: send as plain text if escaping still fails
+            sent = await app.bot.send_message(
+                ADMIN_ID,
+                f"❓ {header}\n\n{question}",
+                reply_markup=InlineKeyboardMarkup(btns),
+            )
         msg_ids.append(sent.message_id)
 
     pending[req_id]["msg_ids"] = msg_ids

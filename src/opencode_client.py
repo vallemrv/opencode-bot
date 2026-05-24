@@ -8,6 +8,8 @@ import json
 import asyncio
 import aiohttp
 import logging
+import sqlite3
+from pathlib import Path
 from typing import AsyncIterator, Any
 
 logger = logging.getLogger(__name__)
@@ -123,50 +125,60 @@ class OpenCodeClient:
     #  Sessions                                                            #
     # ------------------------------------------------------------------ #
 
+    def _get_session_directories_from_db(self) -> list[str]:
+        """
+        Read unique session directories directly from OpenCode's SQLite database.
+        This is needed because the API only matches exact directories, but sessions
+        can be created in subdirectories of a project worktree (e.g. valletpv/django).
+        """
+        db_path = Path.home() / ".local" / "share" / "opencode" / "opencode.db"
+        try:
+            conn = sqlite3.connect(str(db_path))
+            rows = conn.execute(
+                "SELECT DISTINCT directory FROM session WHERE time_archived IS NULL ORDER BY time_updated DESC"
+            ).fetchall()
+            conn.close()
+            return [r[0] for r in rows if r[0]]
+        except Exception as exc:
+            logger.warning(f"Could not read OpenCode DB for directories: {exc}")
+            return []
+
     async def list_sessions(self, directory: str | None = None, roots: bool = False) -> list[dict]:
         """
         List sessions. If directory is given, scoped to that project.
         If roots=True, only returns top-level sessions (no children/forks).
-        If not, fetches all projects and aggregates sessions from each one,
-        because the bare /session endpoint only returns sessions for the
-        server's own project.
+        If not, reads all unique session directories from OpenCode's SQLite DB
+        and queries the API for each one — needed because sessions can be in
+        subdirectories of a project worktree and the API matches exact directory.
         """
         if directory:
             path = "/session?roots=true" if roots else "/session"
             return await self._get(path, directory=directory)
-        # Aggregate across all known projects
-        try:
-            projects = await self._get("/project")
-        except Exception:
-            projects = []
-        # Build a map worktree -> projectID to filter out sessions that don't belong
-        wt_to_pid: dict[str, str] = {
-            p["worktree"]: p["id"]
-            for p in projects
-            if p.get("worktree") and p.get("worktree") != "/" and p.get("id")
-        }
-        worktrees = list(wt_to_pid.keys())
+
+        # Get all unique directories that have sessions from the DB
+        dirs = await asyncio.get_event_loop().run_in_executor(
+            None, self._get_session_directories_from_db
+        )
+
         all_sessions: list[dict] = []
         seen_ids: set[str] = set()
         sess_path = "/session?roots=true" if roots else "/session"
-        for wt in worktrees:
-            pid = wt_to_pid[wt]
+
+        for d in dirs:
             try:
-                sessions = await self._get(sess_path, directory=wt)
+                sessions = await self._get(sess_path, directory=d)
                 for s in sessions:
                     sid = s.get("id", "")
-                    # Skip sessions that belong to a different project (e.g. global leaking in)
-                    if s.get("projectID") and s.get("projectID") != pid:
-                        continue
                     if sid and sid not in seen_ids:
                         seen_ids.add(sid)
-                        # Inject the worktree so callers can group by project
-                        s = {**s, "_worktree": wt}
+                        effective_dir = s.get("directory") or d
+                        s = {**s, "_worktree": effective_dir}
                         all_sessions.append(s)
             except Exception:
                 pass
+
+        # Fallback: bare call in case DB is unavailable
         if not all_sessions:
-            # Last resort: bare call
             try:
                 bare = await self._get(sess_path)
                 for s in bare:
@@ -176,17 +188,7 @@ class OpenCodeClient:
                         all_sessions.append(s)
             except Exception:
                 pass
-        else:
-            # Also merge bare sessions in case some projects aren't in /project list
-            try:
-                bare = await self._get(sess_path)
-                for s in bare:
-                    sid = s.get("id", "")
-                    if sid and sid not in seen_ids:
-                        seen_ids.add(sid)
-                        all_sessions.append(s)
-            except Exception:
-                pass
+
         return all_sessions
 
     async def get_session_children(self, session_id: str, directory: str | None = None) -> list[dict]:
