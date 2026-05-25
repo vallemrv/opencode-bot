@@ -384,6 +384,8 @@ async def _finish_status(app: Application, session_id: str):
             files_str += md2tgv2._escape(f" +{len(files_edited)-3}")
 
     header_parts = [f"✅ `{md2tgv2._escape(cwd_name)}`"]
+    if ctx.bot_data.get("send_target"):
+        header_parts.append("📤")
     if model_info:
         header_parts.append(model_info)
     if elapsed:
@@ -1267,7 +1269,9 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 f"✅ Sesión creada\n"
                 f"📦 `{title}`\n"
                 f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
-                f"Escribe el prompt:",
+                f"📤 *Modo send activado*\n\n"
+                f"Escribe cualquier mensaje para enviarlo a esta sesión.\n"
+                f"Usa /endsend para salir del modo.",
                 parse_mode="Markdown",
             )
         else:
@@ -1275,7 +1279,9 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 f"✅ Sesión creada\n"
                 f"📦 `{title}`\n"
                 f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
-                f"Envía tu primer prompt.",
+                f"📤 *Modo send activado*\n\n"
+                f"Escribe cualquier mensaje para enviarlo a esta sesión.\n"
+                f"Usa /endsend para salir del modo.",
                 parse_mode="Markdown",
             )
 
@@ -2337,8 +2343,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
             return
 
-    # /send flow: explicit target from picker takes highest priority
-    send_target = ctx.bot_data.pop("send_target", None)
+    # /send persistent mode: send_target stays active until /endsend
+    send_target = ctx.bot_data.get("send_target")
     if send_target:
         sid       = send_target["session_id"]
         directory = send_target["directory"]
@@ -2553,7 +2559,10 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ctx.bot_data["send_target"] = {"session_id": sid, "directory": directory}
         title = roots[0].get("title") or sid[:12]
         await q.edit_message_text(
-            f"📂 `{Path(directory).name}` · `{title}`\n\nEscribe el prompt:",
+            f"📂 `{Path(directory).name}` · `{title}`\n\n"
+            f"📤 *Modo send activado*\n\n"
+            f"Escribe cualquier mensaje para enviarlo a esta sesión.\n"
+            f"Usa /endsend para salir del modo.",
             parse_mode="Markdown",
         )
         return
@@ -2591,7 +2600,10 @@ async def cb_sendsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         title = sid[:12]
 
     await q.edit_message_text(
-        f"📂 `{Path(directory).name}` · `{title}`\n\nEscribe el prompt:",
+        f"📂 `{Path(directory).name}` · `{title}`\n\n"
+        f"📤 *Modo send activado*\n\n"
+        f"Escribe cualquier mensaje para enviarlo a esta sesión.\n"
+        f"Usa /endsend para salir del modo.",
         parse_mode="Markdown",
     )
 
@@ -2606,6 +2618,21 @@ async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # We store the send context so cb_provmodel knows to set send_target instead of active
     ctx.bot_data["send_new_sess_dir"] = directory
     await _show_provider_picker(q, ctx, directory)
+
+
+@admin_only
+async def cmd_endsend(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Exit persistent send mode."""
+    send_target = ctx.bot_data.pop("send_target", None)
+    if send_target:
+        directory = send_target.get("directory", "")
+        cwd_name = Path(directory).name if directory else "?"
+        await update.message.reply_text(
+            f"📤 *Modo send desactivado*\n\nYa no se envían mensajes automáticamente a `{cwd_name}`.",
+            parse_mode="Markdown",
+        )
+    else:
+        await update.message.reply_text("⚠️ No estás en modo send.")
 
 
 # ---------------------------------------------------------------------------
@@ -2648,7 +2675,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"*Comandos*\n"
             f"/open — abrir proyecto o cambiar sesión\n"
             f"/projects — ver todos los proyectos con sesiones\n"
-            f"/send — enviar prompt a un proyecto específico\n"
+            f"/send — enviar prompt a proyecto (modo persistente)\n"
+            f"/endsend — salir del modo send persistente\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
@@ -2667,7 +2695,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"*Comandos*\n"
             f"/open — navega carpetas, elige proyecto y modelo, crea sesión\n"
             f"/projects — ver todos los proyectos con sesiones\n"
-            f"/send — enviar prompt a un proyecto específico\n"
+            f"/send — enviar prompt a proyecto (modo persistente)\n"
+            f"/endsend — salir del modo send persistente\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
@@ -2693,6 +2722,7 @@ def main():
     app.add_handler(CommandHandler("models",   cmd_models))
     app.add_handler(CommandHandler("esc",      cmd_esc))
     app.add_handler(CommandHandler("send",     cmd_send))
+    app.add_handler(CommandHandler("endsend",  cmd_endsend))
     app.add_handler(CommandHandler("restart",  cmd_restart))
 
     app.add_handler(CallbackQueryHandler(cb_ob,        pattern=r"^ob:"))
@@ -2742,7 +2772,8 @@ def main():
             BotCommand("start",    "Estado y menú"),
             BotCommand("open",     "Abrir proyecto / sesión"),
             BotCommand("projects", "Ver proyectos con sesiones abiertas"),
-            BotCommand("send",     "Enviar prompt a un proyecto específico"),
+            BotCommand("send",     "Enviar prompt a proyecto (modo persistente)"),
+            BotCommand("endsend",  "Salir del modo send persistente"),
             BotCommand("close",    "Cerrar proyecto"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),

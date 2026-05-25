@@ -71,7 +71,8 @@ El bot **no gestiona** el proceso de OpenCode, solo se conecta a él vía HTTP y
 | `/sessions` | Gestiona sesiones del proyecto activo |
 | `/models` | Cambia el modelo de la sesión activa |
 | `/projects` | Lista todos los proyectos con sesiones en OpenCode |
-| `/send` | Envía prompt a un proyecto específico (sin cambiar sesión activa) |
+| `/send` | Entra en modo persistente: todos los mensajes se envían al proyecto/sesión seleccionado |
+| `/endsend` | Sale del modo send persistente |
 | `/esc` | Cancela la tarea en curso (abort) |
 
 Cualquier texto libre (o audio) envía un prompt a la sesión activa. Los replies a mensajes del bot se envían a la sesión que generó ese mensaje.
@@ -102,14 +103,17 @@ Cualquier texto libre (o audio) envía un prompt a la sesión activa. Los replie
        └─ "Cerrar todo del server" → elimina TODAS las sesiones de TODOS los proyectos
 ```
 
-### /send
+### /send (modo persistente)
 
 ```
 /send
   └─ Lista proyectos con sesiones
        └─ Elige proyecto
             └─ Elige sesión (o crear nueva)
-                 └─ Escribe prompt → envía sin cambiar sesión activa
+                 └─ Entra en modo send persistente
+                      └─ Todos los mensajes directos se envían a esa sesión
+                      └─ Muestra indicador en cada respuesta
+                      └─ /endsend para salir del modo
 ```
 
 ### Texto libre → prompt
