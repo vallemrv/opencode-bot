@@ -2415,14 +2415,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     provider_id = pending["providerID"] if pending else None
     model_id    = pending["modelID"]    if pending else None
 
-    try:
-        await oc.send_message_async(sid, text, directory=directory,
-                                    provider_id=provider_id, model_id=model_id)
-    except Exception as exc:
-        await update.message.reply_text(f"❌ Error al enviar: {exc}")
-        return
-
-    # Create initial status message that will be updated when SSE events arrive
+    # Create status message BEFORE sending to OpenCode, so the SSE listener
+    # always finds it in tracked_sessions regardless of event timing.
     sent = await update.message.reply_text(
         f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
         f"🧩 `...` | ⏱ `00:00`\n\n"
@@ -2432,16 +2426,23 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
         ]]),
     )
-
-    # Use tracked_sessions as dict to store pending message
-    # SSE listener will find it and use it instead of creating new message
     tracked = ctx.bot_data.setdefault("tracked_sessions", {})
     tracked[sid] = {
         "msg_id": sent.message_id,
         "directory": directory,
-        "pending": True,  # marks it as waiting for first SSE event
+        "pending": True,
     }
     _track_msg(ctx.application, sent.message_id, sid, directory)
+
+    try:
+        await oc.send_message_async(sid, text, directory=directory,
+                                    provider_id=provider_id, model_id=model_id)
+    except Exception as exc:
+        # Clean up the status message if send failed
+        await _delete_msg(ctx.bot, ADMIN_ID, sent.message_id)
+        tracked.pop(sid, None)
+        await update.message.reply_text(f"❌ Error al enviar: {exc}")
+        return
 
 
 # ---------------------------------------------------------------------------
