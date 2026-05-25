@@ -10,6 +10,29 @@ Bot de Telegram para controlar el servidor OpenCode remotamente.
 - **Reiniciar**: `sudo systemctl restart opencode-bot.service`
 - **Logs**: `journalctl -u opencode-bot.service -f`
 
+## Flujo de ramas (dev/prod)
+
+| Rama | Entorno | Descripción |
+|------|---------|-------------|
+| `dev` | **Este servidor** (dev) | Desarrollo activo. Aquí se hacen todos los cambios. |
+| `main` | **VPS** (producción) | Solo recibe merges explícitos desde `dev` cuando está estable. |
+
+### Reglas
+- **Todo cambio nuevo va a `dev`**. Nunca commitear directamente en `main`.
+- Para pasar cambios a producción:
+  ```bash
+  git checkout main
+  git merge dev
+  git push origin main
+  # Luego en el VPS: git pull && sudo systemctl restart opencode-bot.service
+  ```
+- El VPS está en la rama `main` y **no debe cambiarse a `dev`**.
+- Si hay un hotfix urgente en prod, se hace en `main` y se mergea de vuelta a `dev`:
+  ```bash
+  git checkout dev
+  git merge main
+  ```
+
 ## Estructura del proyecto
 
 ```

@@ -1099,45 +1099,24 @@ async def _show_session_picker(q, ctx, cwd: str, sessions: list[dict]):
         else:
             roots.append(s)
 
-    # Flatten into ordered list with depth info (max 2 levels shown)
-    ordered: list[tuple[dict, int]] = []
-    def _add(s, depth):
-        ordered.append((s, depth))
-        for child in children_map.get(s["id"], []):
-            _add(child, depth + 1)
-    for s in roots:
-        _add(s, 0)
-
+    # Show only root sessions; child sessions are internal to OpenCode
     btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"newsess:{pk}")]]
-    for s, depth in ordered[:10]:
+    for s in roots[:10]:
         sid   = s.get("id", "")
         title = s.get("title") or sid[:12]
         mark  = " ✅" if sid == active_sid else ""
-        n_kids = len(children_map.get(sid, []))
-        # Visual indicators
-        prefix = "  └ " if depth > 0 else ""
-        kids_warn = f" [{n_kids}↓]" if n_kids else ""
         sk = _key(ctx, sid)
         btns.append([
             InlineKeyboardButton(
-                f"{prefix}{title[:20]}{kids_warn}{mark}",
+                f"{title[:24]}{mark}",
                 callback_data=f"actsess:{sk}:{pk}",
             ),
             InlineKeyboardButton("🗑", callback_data=f"delsess:{sk}:{pk}"),
         ])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
-    total = len(sessions)
-    roots_count = len(roots)
-    child_count = total - roots_count
-    detail = f"{roots_count} raíz"
-    if child_count:
-        detail += f" + {child_count} fork{'s' if child_count != 1 else ''}"
-
     await q.edit_message_text(
-        f"📂 `{cwd_path.name}` — {total} sesiones ({detail})\n"
-        f"_\\[N↓\\] = sesiones hijas que se borrarán en cascada_" if child_count else
-        f"📂 `{cwd_path.name}` — {total} sesiones",
+        f"📂 `{cwd_path.name}` — {len(roots)} sesión{'es' if len(roots) != 1 else ''}",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -1358,20 +1337,14 @@ async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Check if this session has children before deleting
     children = await oc.get_session_children(sid, directory=cwd or None)
     if children:
-        # Warn user: deleting this will cascade to all children
         sk = _key(ctx, sid)
         n  = len(children)
-        child_titles = ", ".join(
-            f"`{c.get('title') or c['id'][:8]}`" for c in children[:3]
-        )
-        if n > 3:
-            child_titles += f" y {n-3} más"
         await q.edit_message_text(
-            f"⚠️ *Esta sesión tiene {n} hijo{'s' if n != 1 else ''}*\n\n"
-            f"Si la borras, también se borrarán: {child_titles}\n\n"
-            f"¿Confirmar borrado en cascada?",
+            f"⚠️ ¿Borrar esta sesión?\n\n"
+            f"OpenCode creó {n} sub-sesión{'es' if n != 1 else ''} interna{'s' if n != 1 else ''} "
+            f"que también se eliminarán.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"🗑 Borrar todo ({n+1} sesiones)", callback_data=f"delconfirm:{sk}:{pk or 0}")],
+                [InlineKeyboardButton("🗑 Borrar", callback_data=f"delconfirm:{sk}:{pk or 0}")],
                 [InlineKeyboardButton("❌ Cancelar", callback_data=f"os:{pk or 0}")],
             ]),
             parse_mode="Markdown",
@@ -1847,10 +1820,14 @@ async def cb_sesspick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     active_sid = (active or {}).get("session_id", "")
     pk         = _key(ctx, directory)
 
+    # Filter to root sessions only; child sessions are internal to OpenCode
+    by_id = {s["id"]: s for s in sessions}
+    roots = [s for s in sessions if not (s.get("parentID") and s["parentID"] in by_id)]
+
     btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"newsess:{pk}")]]
-    if sessions:
+    if roots:
         btns.append([InlineKeyboardButton("🗑 Borrar todas", callback_data=f"sda:{pk}")])
-    for s in sessions[:8]:
+    for s in roots[:8]:
         sid   = s.get("id", "")
         title = s.get("title") or sid[:12]
         mark  = " ✅" if sid == active_sid else ""
@@ -2566,11 +2543,15 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     active    = db.get_active()
     active_sid = (active or {}).get("session_id", "")
 
-    if len(sessions) == 1:
-        # Only one session — go straight to prompt input
-        sid = sessions[0].get("id", "")
+    # Filter to root sessions only; child sessions are internal to OpenCode
+    by_id = {s["id"]: s for s in sessions}
+    roots = [s for s in sessions if not (s.get("parentID") and s["parentID"] in by_id)]
+
+    if len(roots) == 1:
+        # Only one root session — go straight to prompt input
+        sid = roots[0].get("id", "")
         ctx.bot_data["send_target"] = {"session_id": sid, "directory": directory}
-        title = sessions[0].get("title") or sid[:12]
+        title = roots[0].get("title") or sid[:12]
         await q.edit_message_text(
             f"📂 `{Path(directory).name}` · `{title}`\n\nEscribe el prompt:",
             parse_mode="Markdown",
@@ -2578,7 +2559,7 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"sendnewsess:{dk}")]]
-    for s in sessions[:8]:
+    for s in roots[:8]:
         sid   = s.get("id", "")
         title = s.get("title") or sid[:12]
         mark  = " ✅" if sid == active_sid else ""
