@@ -1279,9 +1279,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 f"✅ Sesión creada\n"
                 f"📦 `{title}`\n"
                 f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
-                f"📤 *Modo send activado*\n\n"
-                f"Escribe cualquier mensaje para enviarlo a esta sesión.\n"
-                f"Usa /endsend para salir del modo.",
+                f"Envía tu primer prompt.",
                 parse_mode="Markdown",
             )
 
