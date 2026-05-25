@@ -384,7 +384,7 @@ async def _finish_status(app: Application, session_id: str):
             files_str += md2tgv2._escape(f" +{len(files_edited)-3}")
 
     header_parts = [f"✅ `{md2tgv2._escape(cwd_name)}`"]
-    if ctx.bot_data.get("send_target"):
+    if app.bot_data.get("send_target"):
         header_parts.append("📤")
     if model_info:
         header_parts.append(model_info)
