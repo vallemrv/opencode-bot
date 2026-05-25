@@ -2396,12 +2396,32 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     provider_id = pending["providerID"] if pending else None
     model_id    = pending["modelID"]    if pending else None
 
+    send_mode = ctx.bot_data.get("send_target")
+    
+    try:
+        sess_info = await oc.get_session(sid, directory=directory)
+        sess_title = sess_info.get("title") or sid[:12]
+        model_obj = sess_info.get("model", {})
+        model_short = ""
+        if model_obj:
+            model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+            model_short = model_full.split("/")[-1] if "/" in model_full else model_full
+    except Exception:
+        sess_title = sid[:12]
+        model_short = ""
+
+    send_indicator = " 📤" if send_mode else ""
+    session_info = f"📦 `{sess_title[:16]}`{send_indicator}" if send_mode else ""
+    
     # Create status message BEFORE sending to OpenCode, so the SSE listener
     # always finds it in tracked_sessions regardless of event timing.
+    status_text = f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
+    if session_info:
+        status_text += f"{session_info}\n"
+    status_text += f"🧩 `{model_short or '...'}` | ⏱ `00:00`\n\n_Pulsa_ /esc _para cancelar_"
+    
     sent = await update.message.reply_text(
-        f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
-        f"🧩 `...` | ⏱ `00:00`\n\n"
-        f"_Pulsa_ /esc _para cancelar_",
+        status_text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
