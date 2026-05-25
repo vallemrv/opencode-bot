@@ -103,17 +103,26 @@ Cualquier texto libre (o audio) envía un prompt a la sesión activa. Los replie
        └─ "Cerrar todo del server" → elimina TODAS las sesiones de TODOS los proyectos
 ```
 
-### /send (modo persistente)
+### /send (modo wizard por mensaje)
 
 ```
 /send
-  └─ Lista proyectos con sesiones
-       └─ Elige proyecto
-            └─ Elige sesión (o crear nueva)
-                 └─ Entra en modo send persistente
-                      └─ Todos los mensajes directos se envían a esa sesión
-                      └─ Muestra indicador en cada respuesta
-                      └─ /endsend para salir del modo
+  └─ Activa modo send
+       └─ "Cada mensaje requerirá elegir destino"
+       
+Mensaje: "haz commit"
+  └─ Wizard: elige proyecto → elige sesión → envía
+
+Mensaje: "otra cosa"
+  └─ Wizard: elige proyecto → elige sesión → envía
+
+/endsend
+  └─ Desactiva modo send
+```
+
+También funciona sin modo:
+```
+/send → wizard → elige → "Escribe el mensaje" → envía
 ```
 
 ### Texto libre → prompt
