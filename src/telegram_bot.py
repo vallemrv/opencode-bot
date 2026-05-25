@@ -301,8 +301,9 @@ async def _finish_status(app: Application, session_id: str):
         for job in app.job_queue.get_jobs_by_name("status_heartbeat"):
             job.schedule_removal()
 
-    # clean up tracked_sessions entry
-    app.bot_data.get("tracked_sessions", set()).discard(session_id)
+    # clean up tracked_sessions entry (now a dict)
+    tracked = app.bot_data.get("tracked_sessions", {})
+    tracked.pop(session_id, None)
 
     # clean up any child→parent mappings for this parent
     child_map = app.bot_data.get("child_to_parent", {})
@@ -668,44 +669,80 @@ async def sse_listener(app: Application) -> None:
 
                 if state_type in ("busy", "retry"):
                     if not st:
-                        # Child sessions never create their own status entry
-                        if is_child:
-                            continue
-                        # Only track sessions we've sent a prompt to (active or via /send)
-                        active_check = db.get_active()
-                        tracked = app.bot_data.get("tracked_sessions", set())
-                        is_active = active_check and active_check.get("session_id") == sid
-                        is_tracked = sid in tracked
-                        if not is_active and not is_tracked:
-                            continue
-                        # Session just started processing — create status msg
-                        try:
-                            sess_info = await oc.get_session(sid)
-                            directory = sess_info.get("directory", "")
-                            model_obj = sess_info.get("model", {})
-                            model_label = (
-                                f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
-                                if model_obj else "default"
-                            )
-                            sess_title = sess_info.get("title") or ""
-                        except Exception:
-                            directory   = ""
-                            model_label = "default"
-                            sess_title  = ""
-                        cwd_name = Path(directory).name or "?"
-                        status_msg = await app.bot.send_message(
-                            ADMIN_ID,
-                            f"🔴 *BUSY* | 📂 `{cwd_name}` | 🧩 `{model_label}`\n"
-                            f"⏱ `00:00` | 💬 `0` msgs | 📝 `0` edits\n\n"
-                            f"_Pulsa_ /esc _para cancelar_",
-                            parse_mode="Markdown",
-                            reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
-                            ]]),
-                        )
-                        _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
-                        _track_msg(app, status_msg.message_id, sid, directory)
-                        st = app.bot_data["statuses"].get(sid)
+                        # Check tracked_sessions for pending message (stored by handle_text)
+                        tracked = app.bot_data.get("tracked_sessions", {})
+                        tracked_info = None
+                        
+                        # First check by sid
+                        if sid in tracked:
+                            tracked_info = tracked.get(sid)
+                        # If not found, check by effective_sid (parent)
+                        elif effective_sid in tracked:
+                            tracked_info = tracked.get(effective_sid)
+                        
+                        # If found and pending, convert to status
+                        if tracked_info and tracked_info.get("pending"):
+                            tracked_info["pending"] = False  # mark as no longer pending
+                            try:
+                                sess_info = await oc.get_session(sid)
+                                directory = sess_info.get("directory", "") or tracked_info.get("directory", "")
+                                model_obj = sess_info.get("model", {})
+                                model_label = (
+                                    f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+                                    if model_obj else "default"
+                                )
+                                sess_title = sess_info.get("title") or ""
+                            except Exception:
+                                directory = tracked_info.get("directory", "")
+                                model_label = "default"
+                                sess_title = ""
+                            
+                            _start_status(app, effective_sid, directory, tracked_info["msg_id"], model=model_label, session_title=sess_title)
+                            st = app.bot_data["statuses"].get(effective_sid)
+                        else:
+                            # Child sessions never create their own status entry
+                            if is_child:
+                                continue
+                            # Only process if session is tracked or is active
+                            active_check = db.get_active()
+                            is_active = active_check and active_check.get("session_id") == sid
+                            is_tracked = sid in tracked or effective_sid in tracked
+                            if not is_active and not is_tracked:
+                                continue
+                            # Session just started processing — reuse existing msg or create one
+                            try:
+                                sess_info = await oc.get_session(sid)
+                                directory = sess_info.get("directory", "")
+                                model_obj = sess_info.get("model", {})
+                                model_label = (
+                                    f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+                                    if model_obj else "default"
+                                )
+                                sess_title = sess_info.get("title") or ""
+                            except Exception:
+                                directory   = ""
+                                model_label = "default"
+                                sess_title  = ""
+                            # Reuse tracked message if available (avoids duplicate status msgs)
+                            existing = tracked.get(sid) or tracked.get(effective_sid)
+                            if existing and existing.get("msg_id"):
+                                existing["pending"] = False
+                                _start_status(app, effective_sid, directory or existing.get("directory", ""), existing["msg_id"], model=model_label, session_title=sess_title)
+                            else:
+                                cwd_name = Path(directory).name or "?"
+                                status_msg = await app.bot.send_message(
+                                    ADMIN_ID,
+                                    f"🔴 *BUSY* | 📂 `{cwd_name}` | 🧩 `{model_label}`\n"
+                                    f"⏱ `00:00`\n\n"
+                                    f"_Pulsa_ /esc _para cancelar_",
+                                    parse_mode="Markdown",
+                                    reply_markup=InlineKeyboardMarkup([[
+                                        InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+                                    ]]),
+                                )
+                                _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
+                                _track_msg(app, status_msg.message_id, sid, directory)
+                            st = app.bot_data["statuses"].get(effective_sid) or app.bot_data["statuses"].get(sid)
 
                     if st:
                         st["state"] = "busy"
@@ -2385,22 +2422,6 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Error al enviar: {exc}")
         return
 
-    # Register this session so the SSE listener tracks it (not only the active one)
-    ctx.bot_data.setdefault("tracked_sessions", set()).add(sid)
-
-    # Check if this session has a parent (child sessions route events to parent)
-    status_sid = sid
-    try:
-        sess_info = await oc.get_session(sid)
-        parent_id = sess_info.get("parentID") or ""
-        if parent_id:
-            child_map = ctx.bot_data.setdefault("child_to_parent", {})
-            child_map[sid] = parent_id
-            status_sid = parent_id
-            logger.info(f"Child session {sid[:12]} → parent {parent_id[:12]}")
-    except Exception:
-        pass
-
     # Create initial status message that will be updated when SSE events arrive
     sent = await update.message.reply_text(
         f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
@@ -2411,9 +2432,16 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
         ]]),
     )
-    _track_msg(ctx.application, sent.message_id, status_sid, directory)
-    # Initialize status directly so SSE updates this message instead of creating a new one
-    _start_status(ctx.application, status_sid, directory, sent.message_id)
+
+    # Use tracked_sessions as dict to store pending message
+    # SSE listener will find it and use it instead of creating new message
+    tracked = ctx.bot_data.setdefault("tracked_sessions", {})
+    tracked[sid] = {
+        "msg_id": sent.message_id,
+        "directory": directory,
+        "pending": True,  # marks it as waiting for first SSE event
+    }
+    _track_msg(ctx.application, sent.message_id, sid, directory)
 
 
 # ---------------------------------------------------------------------------
