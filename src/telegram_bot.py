@@ -706,13 +706,20 @@ async def sse_listener(app: Application) -> None:
                         _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
                         _track_msg(app, status_msg.message_id, sid, directory)
                         st = app.bot_data["statuses"].get(sid)
-                        # Delete the "Enviado a..." placeholder if present
-                        pending_sent = app.bot_data.get("pending_sent_msgs", {}).pop(sid, None)
-                        if pending_sent:
-                            await _delete_msg(app.bot, ADMIN_ID, pending_sent)
 
                     if st:
                         st["state"] = "busy"
+                        # Update model and session title if not already set
+                        if not st.get("model") or st.get("model") == "default":
+                            try:
+                                sess_info = await oc.get_session(sid)
+                                model_obj = sess_info.get("model", {})
+                                if model_obj:
+                                    st["model"] = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+                                if not st.get("session_title"):
+                                    st["session_title"] = sess_info.get("title") or ""
+                            except Exception:
+                                pass
                         if state_type == "retry":
                             st["last_text"] = status.get("message", "Retrying...")
                         await _update_status_now(app, effective_sid, force=True)
@@ -2381,13 +2388,19 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Register this session so the SSE listener tracks it (not only the active one)
     ctx.bot_data.setdefault("tracked_sessions", set()).add(sid)
 
+    # Create initial status message that will be updated when SSE events arrive
     sent = await update.message.reply_text(
-        f"📨 Enviado a `{cwd_name}` — esperando respuesta...",
+        f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
+        f"🧩 `...` | ⏱ `00:00`\n\n"
+        f"_Pulsa_ /esc _para cancelar_",
         parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+        ]]),
     )
     _track_msg(ctx.application, sent.message_id, sid, directory)
-    # Store so it can be deleted when the status message appears
-    ctx.bot_data.setdefault("pending_sent_msgs", {})[sid] = sent.message_id
+    # Initialize status directly so SSE updates this message instead of creating a new one
+    _start_status(ctx.application, sid, directory, sent.message_id)
 
 
 # ---------------------------------------------------------------------------

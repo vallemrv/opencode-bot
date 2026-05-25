@@ -1,0 +1,24 @@
+[project]
+name = "opencode-bot"
+version = "1.0.0-beta"
+description = "Bot de Telegram para controlar el servidor OpenCode remotamente"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "vallemrv"}
+]
+dependencies = [
+    "python-telegram-bot[job-queue]>=21.0",
+    "aiohttp>=3.9",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
