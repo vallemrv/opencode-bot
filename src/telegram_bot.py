@@ -2388,6 +2388,19 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Register this session so the SSE listener tracks it (not only the active one)
     ctx.bot_data.setdefault("tracked_sessions", set()).add(sid)
 
+    # Check if this session has a parent (child sessions route events to parent)
+    status_sid = sid
+    try:
+        sess_info = await oc.get_session(sid)
+        parent_id = sess_info.get("parentID") or ""
+        if parent_id:
+            child_map = ctx.bot_data.setdefault("child_to_parent", {})
+            child_map[sid] = parent_id
+            status_sid = parent_id
+            logger.info(f"Child session {sid[:12]} → parent {parent_id[:12]}")
+    except Exception:
+        pass
+
     # Create initial status message that will be updated when SSE events arrive
     sent = await update.message.reply_text(
         f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
@@ -2398,9 +2411,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
         ]]),
     )
-    _track_msg(ctx.application, sent.message_id, sid, directory)
+    _track_msg(ctx.application, sent.message_id, status_sid, directory)
     # Initialize status directly so SSE updates this message instead of creating a new one
-    _start_status(ctx.application, sid, directory, sent.message_id)
+    _start_status(ctx.application, status_sid, directory, sent.message_id)
 
 
 # ---------------------------------------------------------------------------
