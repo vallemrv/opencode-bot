@@ -467,7 +467,33 @@ async def _drain_queue(app: Application, session_id: str):
     cwd_name  = Path(directory).name or "?"
 
     try:
-        # Apply pending model if any
+        sess_info = await oc.get_session(session_id, directory=directory)
+        sess_title = sess_info.get("title") or session_id[:12]
+        model_obj = sess_info.get("model", {})
+        model_short = ""
+        if model_obj:
+            model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+            model_short = model_full.split("/")[-1] if "/" in model_full else model_full
+    except Exception:
+        sess_title = session_id[:12]
+        model_short = ""
+
+    sent = await app.bot.send_message(
+        ADMIN_ID,
+        f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
+        f"📦 `{sess_title[:16]}`\n"
+        f"🧩 `{model_short or '...'}` | ⏱ `00:00`\n\n"
+        f"_Pulsa_ /esc _para cancelar_",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+        ]]),
+    )
+    tracked = app.bot_data.setdefault("tracked_sessions", {})
+    tracked[session_id] = {"msg_id": sent.message_id, "directory": directory, "pending": True}
+    _track_msg(app, sent.message_id, session_id, directory)
+
+    try:
         pending_models = app.bot_data.get("pending_model", {})
         pending    = pending_models.pop(session_id, None)
         provider_id = pending["providerID"] if pending else None
@@ -475,13 +501,15 @@ async def _drain_queue(app: Application, session_id: str):
         await oc.send_message_async(session_id, text, directory=directory,
                                     provider_id=provider_id, model_id=model_id)
         remaining = len(q) if q else 0
-        note = f" ({remaining} más en cola)" if remaining else ""
-        await app.bot.send_message(
-            ADMIN_ID,
-            f"📨 Enviando siguiente mensaje a `{cwd_name}`{note}...",
-            parse_mode="Markdown",
-        )
+        if remaining:
+            await app.bot.send_message(
+                ADMIN_ID,
+                f"📨 `{cwd_name}` — {remaining} mensaje{'s' if remaining != 1 else ''} en cola",
+                parse_mode="Markdown",
+            )
     except Exception as exc:
+        await _delete_msg(app.bot, ADMIN_ID, sent.message_id)
+        tracked.pop(session_id, None)
         await app.bot.send_message(ADMIN_ID, f"❌ Error al enviar mensaje encolado: {exc}")
 
 
