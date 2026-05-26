@@ -2817,7 +2817,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🧩 Modelo: `{model_label}`\n\n"
             f"*Comandos*\n"
             f"/open — abrir proyecto o cambiar sesión\n"
-            f"/projects — ver todos los proyectos con sesiones\n"
             f"/send — enviar prompt a proyecto (modo persistente)\n"
             f"/endsend — salir del modo send persistente\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
@@ -2837,7 +2836,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Sin sesión activa ({total} sesiones en el servidor)\n\n"
             f"*Comandos*\n"
             f"/open — navega carpetas, elige proyecto y modelo, crea sesión\n"
-            f"/projects — ver todos los proyectos con sesiones\n"
             f"/send — enviar prompt a proyecto (modo persistente)\n"
             f"/endsend — salir del modo send persistente\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
@@ -2911,14 +2909,14 @@ def main():
     app.job_queue.run_once(_start_sse, when=1)
 
     async def post_init(application: Application):
+        await application.bot.delete_my_commands()
         await application.bot.set_my_commands([
             BotCommand("start",    "Estado y menú"),
             BotCommand("open",     "Abrir proyecto / sesión"),
-            BotCommand("projects", "Ver proyectos con sesiones abiertas"),
+            BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("send",     "Enviar prompt a proyecto (modo persistente)"),
             BotCommand("endsend",  "Salir del modo send persistente"),
             BotCommand("close",    "Cerrar proyecto"),
-            BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),
             BotCommand("restart",  "Reiniciar el bot"),
             BotCommand("esc",      "Cancelar tarea actual"),
