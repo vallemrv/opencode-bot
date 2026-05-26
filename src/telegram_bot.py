@@ -1222,8 +1222,6 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if row:
         btns.append(row)
 
-    btns.append([InlineKeyboardButton("⚙ Defecto del proveedor", callback_data=f"provmodel:{pk}:{_key(ctx, f'{pid}|')}")])
-
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton("◀", callback_data=f"prov:{pk}:{pid_k}:{page-1}"))
@@ -2074,8 +2072,6 @@ async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             btns.append(row); row = []
     if row:
         btns.append(row)
-    btns.append([InlineKeyboardButton("⚙ Defecto del proveedor", callback_data=f"setmodel:{sk}:{_key(ctx, f'{pid}|')}")])
-
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton("◀", callback_data=f"modprov:{sk}:{pid_k}:{page-1}"))
