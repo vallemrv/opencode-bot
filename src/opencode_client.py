@@ -269,7 +269,7 @@ class OpenCodeClient:
         """Fire-and-forget prompt. Response comes via SSE."""
         body: dict = {"parts": [{"type": "text", "text": text}]}
         if provider_id and model_id:
-            body["model"] = {"providerID": provider_id, "id": model_id}
+            body["model"] = {"providerID": provider_id, "modelID": model_id}
         return await self._post(f"/session/{session_id}/prompt_async", body, directory=directory)
 
     # ------------------------------------------------------------------ #

@@ -1929,7 +1929,14 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     directory = active["directory"]
     cwd_name  = Path(directory).name
 
-    await update.message.reply_text(f"📂 `{cwd_name}`\n⏳ Cargando modelos...", parse_mode="Markdown")
+    sess_title = sid[:12]
+    try:
+        sess_info = await oc.get_session(sid, directory=directory)
+        sess_title = sess_info.get("title") or sid[:12]
+    except Exception:
+        pass
+
+    await update.message.reply_text(f"📂 `{cwd_name}` · `{sess_title}`\n⏳ Cargando modelos...", parse_mode="Markdown")
 
     try:
         models = await _get_models(ctx)
@@ -1951,7 +1958,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await update.message.reply_text(
-        f"📂 `{cwd_name}`\n📦 Elige proveedor:",
+        f"📂 `{cwd_name}` · `{sess_title}`\n📦 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
