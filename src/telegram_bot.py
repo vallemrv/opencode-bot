@@ -2349,28 +2349,39 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
             return
 
-    # /send flow: if in send mode, show wizard for each message
-    send_mode = ctx.bot_data.get("send_mode")
-    if send_mode:
-        # Store the pending text and show project picker
-        ctx.bot_data["send_pending_text"] = text
-        await cmd_send(update, ctx)
-        return
-    
-    # Normal flow: explicit target from picker or resolve target
-    send_target = ctx.bot_data.get("send_target")
-    if send_target:
-        sid       = send_target["session_id"]
-        directory = send_target["directory"]
+    # Check if this message is a reply to a bot message — always takes priority
+    _reply_msg = update.message.reply_to_message
+    _reply_target = None
+    if _reply_msg and _reply_msg.from_user and _reply_msg.from_user.is_bot:
+        _reply_target = ctx.bot_data.get("msg_to_session", {}).get(_reply_msg.message_id)
+
+    if _reply_target:
+        # Reply always bypasses send_mode and send_target
+        sid       = _reply_target["session_id"]
+        directory = _reply_target["directory"]
     else:
-        target = _resolve_target(update, ctx)
-        if not target:
-            await update.message.reply_text(
-                "❌ No hay sesión activa. Usa /open para seleccionar un proyecto."
-            )
+        # /send flow: if in send mode, show wizard for each message
+        send_mode = ctx.bot_data.get("send_mode")
+        if send_mode:
+            # Store the pending text and show project picker
+            ctx.bot_data["send_pending_text"] = text
+            await cmd_send(update, ctx)
             return
-        sid       = target["session_id"]
-        directory = target["directory"]
+
+        # Normal flow: explicit target from picker or resolve target
+        send_target = ctx.bot_data.get("send_target")
+        if send_target:
+            sid       = send_target["session_id"]
+            directory = send_target["directory"]
+        else:
+            target = _resolve_target(update, ctx)
+            if not target:
+                await update.message.reply_text(
+                    "❌ No hay sesión activa. Usa /open para seleccionar un proyecto."
+                )
+                return
+            sid       = target["session_id"]
+            directory = target["directory"]
     cwd_name = Path(directory).name or "?"
 
     # If session is currently busy, queue the message locally and notify.
