@@ -1919,113 +1919,29 @@ async def cb_sda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Show all projects so the user can pick one to change a session's model."""
-    try:
-        all_sessions = await oc.list_sessions()
-    except Exception as exc:
-        await update.message.reply_text(f"❌ Error: {exc}")
+    """Change model for the active session."""
+    active = db.get_active()
+    if not active:
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
         return
 
-    by_dir: dict[str, list] = defaultdict(list)
-    for s in all_sessions:
-        d = s.get("directory", "")
-        if d:
-            by_dir[d].append(s)
+    sid       = active["session_id"]
+    directory = active["directory"]
+    cwd_name  = Path(directory).name
 
-    if not by_dir:
-        await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
-        return
-
-    active     = db.get_active()
-    active_dir = (active or {}).get("directory", "")
-
-    btns = []
-    for directory in sorted(by_dir.keys()):
-        n_sess = len(by_dir[directory])
-        name   = Path(directory).name
-        mark   = " ✅" if directory == active_dir else ""
-        dk     = _key(ctx, directory)
-        btns.append([InlineKeyboardButton(
-            f"📂 {name}{mark}  ({n_sess} sesión{'es' if n_sess != 1 else ''})",
-            callback_data=f"modpick:{dk}",
-        )])
-    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
-
-    await update.message.reply_text(
-        "¿De qué proyecto quieres cambiar el modelo?",
-        reply_markup=InlineKeyboardMarkup(btns),
-    )
-
-
-async def cb_modpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Project chosen in /models → show its sessions."""
-    q = update.callback_query; await q.answer()
-    dk        = int(q.data.split(":")[1])
-    directory = _val(ctx, dk)
-
-    try:
-        sessions = await oc.list_sessions(directory=directory)
-    except Exception as exc:
-        await q.edit_message_text(f"❌ Error: {exc}")
-        return
-
-    if not sessions:
-        await q.edit_message_text(f"No hay sesiones en `{Path(directory).name}`.", parse_mode="Markdown")
-        return
-
-    active     = db.get_active()
-    active_sid = (active or {}).get("session_id", "")
-
-    if len(sessions) == 1:
-        # Only one session — go straight to provider picker
-        sid = sessions[0].get("id", "")
-        sk  = _key(ctx, sid)
-        await _show_model_provider_picker(q, ctx, directory, sid)
-        return
-
-    btns = []
-    for s in sessions[:8]:
-        sid   = s.get("id", "")
-        title = s.get("title") or sid[:12]
-        mark  = " ✅" if sid == active_sid else ""
-        sk    = _key(ctx, sid)
-        dk2   = _key(ctx, directory)
-        btns.append([InlineKeyboardButton(f"{title[:28]}{mark}", callback_data=f"modsess:{sk}:{dk2}")])
-    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
-
-    await q.edit_message_text(
-        f"📂 `{Path(directory).name}` — elige sesión:",
-        reply_markup=InlineKeyboardMarkup(btns),
-        parse_mode="Markdown",
-    )
-
-
-async def cb_modsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Session chosen in /models → show provider picker."""
-    q = update.callback_query; await q.answer()
-    parts     = q.data.split(":")
-    sid       = _val(ctx, int(parts[1]))
-    directory = _val(ctx, int(parts[2]))
-    await _show_model_provider_picker(q, ctx, directory, sid)
-
-
-async def _show_model_provider_picker(q, ctx, directory: str, sid: str):
-    """Show provider list for the /models flow (targeting a specific session)."""
-    sk       = _key(ctx, sid)
-    cwd_name = Path(directory).name
-
-    await q.edit_message_text(f"📂 `{cwd_name}`\n⏳ Cargando modelos...", parse_mode="Markdown")
+    await update.message.reply_text(f"📂 `{cwd_name}`\n⏳ Cargando modelos...", parse_mode="Markdown")
 
     try:
         models = await _get_models(ctx)
     except Exception as exc:
-        await q.edit_message_text(f"❌ Error al cargar modelos: {exc}", parse_mode="Markdown")
+        await update.message.reply_text(f"❌ Error al cargar modelos: {exc}")
         return
 
     groups: dict[str, list] = defaultdict(list)
     for m in models:
         groups[m.get("providerID", "?")].append(m.get("id") or m.get("modelID", "?"))
 
+    sk = _key(ctx, sid)
     btns = []
     for pid in sorted(groups):
         btns.append([InlineKeyboardButton(
@@ -2034,7 +1950,7 @@ async def _show_model_provider_picker(q, ctx, directory: str, sid: str):
         )])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
-    await q.edit_message_text(
+    await update.message.reply_text(
         f"📂 `{cwd_name}`\n📦 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
@@ -3008,8 +2924,6 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_senddelsess,   pattern=r"^senddelsess:"))
     app.add_handler(CallbackQueryHandler(cb_senddelconfirm, pattern=r"^senddelconfirm:"))
     app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
-    app.add_handler(CallbackQueryHandler(cb_modpick,   pattern=r"^modpick:"))
-    app.add_handler(CallbackQueryHandler(cb_modsess,   pattern=r"^modsess:"))
     app.add_handler(CallbackQueryHandler(cb_modprov,   pattern=r"^modprov:"))
     app.add_handler(CallbackQueryHandler(cb_setmodel,  pattern=r"^setmodel:"))
 
