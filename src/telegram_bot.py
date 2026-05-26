@@ -2605,6 +2605,51 @@ async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def _show_send_session_picker(q, ctx, directory: str, sessions: list[dict]):
+    """Session picker for /send flow — same UI as _show_session_picker but uses send callbacks."""
+    cwd_path  = Path(directory)
+    dk        = _key(ctx, directory)
+    active    = db.get_active()
+    active_sid = (active or {}).get("session_id")
+
+    # Build parent→children map
+    by_id = {s["id"]: s for s in sessions}
+    roots = []
+    for s in sessions:
+        pid = s.get("parentID")
+        if pid and pid in by_id:
+            pass  # child session, skip
+        else:
+            roots.append(s)
+
+    pending_text = ctx.bot_data.get("send_mode_text")
+    text_hint = ""
+    if pending_text:
+        preview = pending_text[:40]
+        text_hint = f"📝 `{preview}{'...' if len(pending_text) > 40 else ''}`\n\n"
+
+    btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"sendnewsess:{dk}")]]
+    for s in roots[:10]:
+        sid   = s.get("id", "")
+        title = s.get("title") or sid[:12]
+        mark  = " ✅" if sid == active_sid else ""
+        sk    = _key(ctx, sid)
+        btns.append([
+            InlineKeyboardButton(
+                f"{title[:24]}{mark}",
+                callback_data=f"sendsess:{sk}:{dk}",
+            ),
+            InlineKeyboardButton("🗑", callback_data=f"senddelsess:{sk}:{dk}"),
+        ])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    await q.edit_message_text(
+        f"📂 `{cwd_path.name}` — {len(roots)} sesión{'es' if len(roots) != 1 else ''}\n\n{text_hint}Elige sesión:",
+        reply_markup=InlineKeyboardMarkup(btns),
+        parse_mode="Markdown",
+    )
+
+
 async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Project selected for /send → show its sessions to pick one."""
     q = update.callback_query; await q.answer()
@@ -2617,33 +2662,7 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"❌ Error: {exc}")
         return
 
-    active    = db.get_active()
-    active_sid = (active or {}).get("session_id", "")
-
-    # Filter to root sessions only; child sessions are internal to OpenCode
-    by_id = {s["id"]: s for s in sessions}
-    roots = [s for s in sessions if not (s.get("parentID") and s["parentID"] in by_id)]
-
-    pending_text = ctx.bot_data.get("send_mode_text")
-    text_hint = ""
-    if pending_text:
-        preview = pending_text[:40]
-        text_hint = f"📝 `{preview}{'...' if len(preview) > 40 else ''}`\n\n"
-
-    btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"sendnewsess:{dk}")]]
-    for s in roots[:8]:
-        sid   = s.get("id", "")
-        title = s.get("title") or sid[:12]
-        mark  = " ✅" if sid == active_sid else ""
-        sk    = _key(ctx, sid)
-        btns.append([InlineKeyboardButton(f"{title[:28]}{mark}", callback_data=f"sendsess:{sk}:{dk}")])
-    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
-
-    await q.edit_message_text(
-        f"📂 `{Path(directory).name}`\n\n{text_hint}Elige sesión:",
-        reply_markup=InlineKeyboardMarkup(btns),
-        parse_mode="Markdown",
-    )
+    await _show_send_session_picker(q, ctx, directory, sessions)
 
 
 async def cb_sendsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -2744,6 +2763,75 @@ async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # We store the send context so cb_provmodel knows to set send_target instead of active
     ctx.bot_data["send_new_sess_dir"] = directory
     await _show_provider_picker(q, ctx, directory)
+
+
+async def cb_senddelsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Delete a session from the /send session picker, then refresh the picker."""
+    q = update.callback_query; await q.answer()
+    parts = q.data.split(":")
+    sid   = _val(ctx, int(parts[1]))
+    dk    = int(parts[2])
+    directory = _val(ctx, dk)
+
+    # Check for children
+    children = await oc.get_session_children(sid, directory=directory or None)
+    if children:
+        sk = _key(ctx, sid)
+        n  = len(children)
+        await q.edit_message_text(
+            f"⚠️ ¿Borrar esta sesión?\n\n"
+            f"OpenCode creó {n} sub-sesión{'es' if n != 1 else ''} interna{'s' if n != 1 else ''} "
+            f"que también se eliminarán.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🗑 Borrar", callback_data=f"senddelconfirm:{sk}:{dk}")],
+                [InlineKeyboardButton("❌ Cancelar", callback_data=f"sendpick:{dk}")],
+            ]),
+            parse_mode="Markdown",
+        )
+        return
+
+    await _do_send_delete_session(q, ctx, sid, directory, dk)
+
+
+async def cb_senddelconfirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Confirmed deletion of session with children from /send picker."""
+    q = update.callback_query; await q.answer()
+    parts = q.data.split(":")
+    sid   = _val(ctx, int(parts[1]))
+    dk    = int(parts[2])
+    directory = _val(ctx, dk)
+    await _do_send_delete_session(q, ctx, sid, directory, dk)
+
+
+async def _do_send_delete_session(q, ctx, sid: str, directory: str, dk: int):
+    """Delete session and refresh the /send session picker."""
+    try:
+        await oc.delete_session(sid, directory=directory or None)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}", parse_mode="Markdown")
+        return
+
+    ctx.application.bot_data.get("statuses", {}).pop(sid, None)
+    active = db.get_active()
+    if active and active.get("session_id") == sid:
+        db.clear_active()
+
+    try:
+        sessions = await oc.list_sessions(directory=directory)
+    except Exception:
+        sessions = []
+
+    if sessions:
+        await _show_send_session_picker(q, ctx, directory, sessions)
+    else:
+        await q.edit_message_text(
+            f"✅ Sesión borrada. No quedan sesiones en `{Path(directory).name}`.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ Nueva sesión", callback_data=f"sendnewsess:{dk}")],
+                [InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")],
+            ]),
+            parse_mode="Markdown",
+        )
 
 
 def _clear_send_mode(bot_data: dict) -> bool:
@@ -2892,7 +2980,9 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_qsendnow,  pattern=r"^qsendnow:"))
     app.add_handler(CallbackQueryHandler(cb_sendpick,    pattern=r"^sendpick:"))
     app.add_handler(CallbackQueryHandler(cb_sendsess,    pattern=r"^sendsess:"))
-    app.add_handler(CallbackQueryHandler(cb_sendnewsess, pattern=r"^sendnewsess:"))
+    app.add_handler(CallbackQueryHandler(cb_sendnewsess,   pattern=r"^sendnewsess:"))
+    app.add_handler(CallbackQueryHandler(cb_senddelsess,   pattern=r"^senddelsess:"))
+    app.add_handler(CallbackQueryHandler(cb_senddelconfirm, pattern=r"^senddelconfirm:"))
     app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
     app.add_handler(CallbackQueryHandler(cb_modpick,   pattern=r"^modpick:"))
     app.add_handler(CallbackQueryHandler(cb_modsess,   pattern=r"^modsess:"))
