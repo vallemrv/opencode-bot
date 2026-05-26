@@ -1030,6 +1030,8 @@ async def _server_ok(reply_fn) -> bool:
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not await _server_ok(update.message.reply_text):
         return
+    if _clear_send_mode(ctx.bot_data):
+        await update.message.reply_text("📤 Modo send desactivado.", parse_mode="Markdown")
     txt, kbd = _folder_kbd(ctx, WORKSPACE, 0)
     await update.message.reply_text(txt, reply_markup=kbd, parse_mode="Markdown")
 
@@ -1779,6 +1781,8 @@ async def cb_closeall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 @admin_only
 async def cmd_sessions(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Show all projects so the user can pick one to manage its sessions."""
+    if _clear_send_mode(ctx.bot_data):
+        await update.message.reply_text("📤 Modo send desactivado.", parse_mode="Markdown")
     try:
         all_sessions = await oc.list_sessions()
     except Exception as exc:
@@ -2620,27 +2624,6 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     by_id = {s["id"]: s for s in sessions}
     roots = [s for s in sessions if not (s.get("parentID") and s["parentID"] in by_id)]
 
-    if len(roots) == 1:
-        sid = roots[0].get("id", "")
-        title = roots[0].get("title") or sid[:12]
-        
-        pending_text = ctx.bot_data.pop("send_mode_text", None)
-        if pending_text:
-            await q.edit_message_text(
-                f"📤 Enviando a `{Path(directory).name}`...",
-                parse_mode="Markdown",
-            )
-            await _do_send_text(ctx.application, pending_text, sid, directory, q.message.chat_id)
-        else:
-            ctx.bot_data["send_target"] = {"session_id": sid, "directory": directory}
-            await q.edit_message_text(
-                f"📂 `{Path(directory).name}` · `{title}`\n\n"
-                f"📤 *Sesión seleccionada*\n\n"
-                f"Escribe el mensaje:",
-                parse_mode="Markdown",
-            )
-        return
-
     pending_text = ctx.bot_data.get("send_mode_text")
     text_hint = ""
     if pending_text:
@@ -2763,13 +2746,20 @@ async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await _show_provider_picker(q, ctx, directory)
 
 
+def _clear_send_mode(bot_data: dict) -> bool:
+    """Clear all send mode state. Returns True if send mode was active."""
+    was_active = bool(bot_data.pop("send_mode", None) or bot_data.pop("send_target", None))
+    bot_data.pop("send_pending_text", None)
+    bot_data.pop("send_mode_text", None)
+    return was_active
+
+
 @admin_only
 async def cmd_endsend(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Exit send mode."""
-    send_mode = ctx.bot_data.pop("send_mode", None)
-    send_target = ctx.bot_data.pop("send_target", None)
-    ctx.bot_data.pop("send_pending_text", None)
-    ctx.bot_data.pop("send_mode_text", None)
+    send_mode = ctx.bot_data.get("send_mode")
+    send_target = ctx.bot_data.get("send_target")
+    _clear_send_mode(ctx.bot_data)
     
     if send_mode:
         await update.message.reply_text(
