@@ -2436,11 +2436,13 @@ RESTART_FLAG = Path("/tmp/opencode-bot-restarting.flag")
 async def cmd_restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Restart opencode-bot.service with feedback."""
     msg = await update.message.reply_text("🔄 *Reiniciando opencode-bot...*", parse_mode="Markdown")
-    
+
     RESTART_FLAG.parent.mkdir(parents=True, exist_ok=True)
     RESTART_FLAG.write_text(str(msg.message_id))
-    
+
     import subprocess
+    bot_root = Path(__file__).parent.parent.resolve()
+    subprocess.run(["git", "-C", str(bot_root), "pull"], capture_output=True)
     subprocess.run(["sudo", "systemctl", "restart", "opencode-bot.service"])
 
 
