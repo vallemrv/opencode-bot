@@ -26,7 +26,7 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, filters,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, RetryAfter
 
 import shutil
 import db
@@ -147,8 +147,8 @@ def _format_elapsed(seconds: float) -> str:
 #   message_id (int): {"session_id": str, "directory": str}
 # }  — max MSG_TRACK_LIMIT entries, oldest evicted first
 
-STATUS_INTERVAL = 30
-STATUS_THROTTLE = 5
+STATUS_INTERVAL = 10
+STATUS_THROTTLE = 3
 MSG_TRACK_LIMIT = 200
 
 
@@ -254,6 +254,23 @@ async def _update_status_now(app: Application, session_id: str, force: bool = Fa
         )
     except BadRequest:
         pass
+    except RetryAfter as e:
+        retry_after = e.retry_after
+        logger.warning(f"Telegram flood control: retry after {retry_after}s")
+        st["last_update_time"] = now + retry_after
+        await asyncio.sleep(retry_after)
+        try:
+            await app.bot.edit_message_text(
+                chat_id=ADMIN_ID,
+                message_id=st["msg_id"],
+                text=_build_status_text(st),
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+                ]]),
+            )
+        except Exception:
+            pass
 
 
 async def _heartbeat_loop(ctx: ContextTypes.DEFAULT_TYPE):
@@ -1011,12 +1028,7 @@ async def sse_listener(app: Application) -> None:
                 delta = props.get("delta", "")
                 if field == "text" and delta:
                     st["state"]     = "busy"
-                    # Accumulate delta in last_text (live status display only).
-                    # Do NOT touch final_text here — message.part.updated carries
-                    # the authoritative full text of each part. Using API in
-                    # _finish_status is the source of truth anyway.
                     st["last_text"] = (st.get("last_text") or "") + delta
-                    await _update_status_now(app, effective_sid)
                 continue
 
             if etype == "message.updated":
