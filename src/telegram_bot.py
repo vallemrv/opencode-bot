@@ -276,7 +276,7 @@ async def _update_status_now(app: Application, session_id: str, force: bool = Fa
 async def _heartbeat_loop(ctx: ContextTypes.DEFAULT_TYPE):
     statuses = ctx.bot_data.get("statuses", {})
     for sid in list(statuses.keys()):
-        await _update_status_now(ctx.application, sid, force=True)
+        await _update_status_now(ctx.application, sid, force=False)
 
 
 def _start_status(app: Application, session_id: str, directory: str, msg_id: int, model: str = "default", session_title: str = ""):
@@ -661,7 +661,11 @@ async def sse_listener(app: Application) -> None:
         props = payload.get("properties", {})
         sid   = props.get("sessionID", "")
 
-        logger.info(f"SSE {etype} sid={sid[:12] if sid else '-'}")
+        NOISY_EVENTS = {"message.part.delta", "sync", "server.heartbeat", "message.part.updated"}
+        if etype in NOISY_EVENTS:
+            logger.debug(f"SSE {etype} sid={sid[:12] if sid else '-'}")
+        else:
+            logger.info(f"SSE {etype} sid={sid[:12] if sid else '-'}")
 
         try:
             if etype in ("server.connected", "session.created", "session.updated", "session.deleted"):
