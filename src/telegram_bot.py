@@ -314,18 +314,20 @@ async def _finish_status(app: Application, session_id: str):
     if st and st.get("msg_id"):
         await _delete_msg(app.bot, ADMIN_ID, st["msg_id"])
 
-    reply_text = st.get("final_text") if st else None
-    directory  = st.get("directory") if st else None
+    cached_text = st.get("final_text") if st else None
+    directory   = st.get("directory") if st else None
 
-    # Fetch messages once — used both for fallback text and token info
+    # Always fetch messages from API — it's the authoritative source for the full response.
+    # final_text from SSE events may be incomplete (multi-step responses, partial deltas).
     fetched_messages = None
+    reply_text = None
     if directory:
         try:
             fetched_messages = await oc.get_messages(session_id, directory=directory)
         except Exception as exc:
             logger.error(f"Failed to get messages: {exc}")
 
-    if not reply_text and fetched_messages:
+    if fetched_messages:
         for m in reversed(fetched_messages):
             info  = m.get("info", {})
             role  = info.get("role") or m.get("role")
@@ -335,6 +337,11 @@ async def _finish_status(app: Application, session_id: str):
                 if texts:
                     reply_text = "\n".join(texts)
                     break
+
+    # Fallback to cached SSE text if API fetch failed or returned nothing
+    if not reply_text and cached_text:
+        reply_text = cached_text
+        logger.warning(f"Using cached SSE text for {session_id[:12]} (API returned no text)")
 
     cwd_name = Path(directory or "").name or "?"
 
@@ -670,19 +677,26 @@ async def sse_listener(app: Application) -> None:
             # ---- resolve child sessions to their parent ----
             # If this sid is a known child, route its events to the parent status.
             # If it's unknown, check with OpenCode whether it has a parentID.
+            # IMPORTANT: Only mark as child if the parent is actually being tracked.
             child_map = app.bot_data.setdefault("child_to_parent", {})
             effective_sid = sid  # the sid whose status entry we'll update
 
             if sid not in statuses:
                 # Could be a child session we haven't seen yet
                 if sid in child_map:
-                    effective_sid = child_map[sid]
+                    parent_id = child_map[sid]
+                    # Only route to parent if parent is actually tracked
+                    if parent_id in statuses:
+                        effective_sid = parent_id
+                    else:
+                        # Parent not tracked — treat this session as independent
+                        child_map.pop(sid, None)
                 else:
                     # Ask OpenCode if this session has a parent
                     try:
                         sess_info = await oc.get_session(sid)
                         parent_id = sess_info.get("parentID") or ""
-                        if parent_id:
+                        if parent_id and parent_id in statuses:
                             child_map[sid] = parent_id
                             effective_sid  = parent_id
                             logger.info(f"Child session {sid[:12]} → parent {parent_id[:12]}")
@@ -690,6 +704,7 @@ async def sse_listener(app: Application) -> None:
                         pass
 
             st = statuses.get(effective_sid)
+            logger.debug(f"SSE {etype} sid={sid[:12]} effective={effective_sid[:12]} st={'yes' if st else 'no'}")
 
             # ---- session status ----
             if etype == "session.status":
@@ -797,6 +812,20 @@ async def sse_listener(app: Application) -> None:
                         continue
                     if st:
                         await _finish_status(app, effective_sid)
+                    else:
+                        # Status was never created (missed busy event) but there may be
+                        # a tracked waiting message — recover by creating a minimal status
+                        tracked = app.bot_data.get("tracked_sessions", {})
+                        tracked_info = tracked.get(effective_sid) or tracked.get(sid)
+                        if tracked_info:
+                            try:
+                                sess_info = await oc.get_session(sid)
+                                directory = sess_info.get("directory", "") or tracked_info.get("directory", "")
+                            except Exception:
+                                directory = tracked_info.get("directory", "")
+                            _start_status(app, effective_sid, directory, tracked_info["msg_id"])
+                            await _finish_status(app, effective_sid)
+                            logger.info(f"Recovered finish for {effective_sid[:12]} (missed busy event)")
                 continue
 
             if etype == "session.idle":
@@ -805,6 +834,19 @@ async def sse_listener(app: Application) -> None:
                     continue
                 if st:
                     await _finish_status(app, effective_sid)
+                else:
+                    # Recover: missed busy event but may have a tracked waiting message
+                    tracked = app.bot_data.get("tracked_sessions", {})
+                    tracked_info = tracked.get(sid)
+                    if tracked_info:
+                        try:
+                            sess_info = await oc.get_session(sid)
+                            directory = sess_info.get("directory", "") or tracked_info.get("directory", "")
+                        except Exception:
+                            directory = tracked_info.get("directory", "")
+                        _start_status(app, sid, directory, tracked_info["msg_id"])
+                        await _finish_status(app, sid)
+                        logger.info(f"Recovered session.idle finish for {sid[:12]}")
                 continue
 
             if etype == "session.error":
@@ -914,7 +956,7 @@ async def sse_listener(app: Application) -> None:
 
                 if part_type == "step-start":
                     # New step: clear current tool and last_text fragment,
-                    # but preserve final_text accumulated so far across steps
+                    # but preserve final_text accumulated so far across steps.
                     st["last_text"] = None
                     st["tool"]      = None
 
@@ -922,9 +964,9 @@ async def sse_listener(app: Application) -> None:
                     st["state"] = "busy"
                     text = part.get("text", "")
                     if text:
-                        # updated events carry the full current text of this part;
-                        # overwrite last_text (current part snapshot) but use it
-                        # as the authoritative final_text for this step
+                        # updated events carry the full current text of this part.
+                        # Keep last_text for live status display.
+                        # final_text tracks the last known text (API is authoritative at finish).
                         st["last_text"]  = text
                         st["final_text"] = text
                     await _update_status_now(app, effective_sid)
@@ -968,9 +1010,12 @@ async def sse_listener(app: Application) -> None:
                 field = props.get("field", "")
                 delta = props.get("delta", "")
                 if field == "text" and delta:
-                    st["state"]      = "busy"
-                    st["last_text"]  = (st.get("last_text") or "") + delta
-                    st["final_text"] = (st.get("final_text") or "") + delta
+                    st["state"]     = "busy"
+                    # Accumulate delta in last_text (live status display only).
+                    # Do NOT touch final_text here — message.part.updated carries
+                    # the authoritative full text of each part. Using API in
+                    # _finish_status is the source of truth anyway.
+                    st["last_text"] = (st.get("last_text") or "") + delta
                     await _update_status_now(app, effective_sid)
                 continue
 
