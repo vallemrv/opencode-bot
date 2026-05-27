@@ -465,6 +465,21 @@ async def _finish_status(app: Application, session_id: str):
     if last_sent:
         _track_msg(app, last_sent.message_id, session_id, directory or "")
 
+    # Clean up child sessions in OpenCode (they are independent copies, no context loss)
+    if directory:
+        try:
+            children = await oc.get_session_children(session_id, directory=directory)
+            for child in children:
+                child_id = child.get("id")
+                if child_id:
+                    try:
+                        await oc.delete_session(child_id, directory=directory)
+                        logger.info(f"Cleaned up child session {child_id[:12]}")
+                    except Exception as exc:
+                        logger.warning(f"Failed to delete child {child_id[:12]}: {exc}")
+        except Exception as exc:
+            logger.warning(f"Failed to list children for {session_id[:12]}: {exc}")
+
     # Process next queued message for this session, if any
     await _drain_queue(app, session_id)
 
@@ -1641,12 +1656,13 @@ async def cb_permabort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 @admin_only
 async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Show projects that have sessions, choose one to close."""
-    await update.message.reply_text("⏳ Cargando proyectos...")
+    loading_msg = await update.message.reply_text("⏳ Cargando proyectos...")
 
     try:
         projects = await oc.list_projects()
         all_sessions = await oc.list_sessions()
     except Exception as exc:
+        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(f"❌ Error: {exc}")
         return
 
@@ -1661,6 +1677,7 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     proj_by_wt = {p.get("worktree", ""): p for p in projects}
 
     if not by_dir:
+        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text("No hay proyectos con sesiones.")
         return
 
@@ -1677,6 +1694,7 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     total = sum(len(v) for v in by_dir.values())
+    await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
     await update.message.reply_text(
         f"Selecciona proyecto a quitar del bot, o cierra todo ({total} sesiones en {len(by_dir)} proyectos):",
         reply_markup=InlineKeyboardMarkup(btns),
@@ -1759,11 +1777,11 @@ async def cb_closeall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try:
         all_sessions = await oc.list_sessions()
     except Exception as exc:
-        await q.edit_message_text(f"❌ Error: {exc}")
+        await q.edit_message_text(f"❌ Error al listar sesiones: {exc}")
         return
 
     deleted = 0
-    errors  = 0
+    failed  = []
     for s in all_sessions:
         sid = s.get("id", "")
         directory = s.get("directory") or s.get("_worktree") or None
@@ -1771,15 +1789,22 @@ async def cb_closeall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await oc.delete_session(sid, directory=directory)
             ctx.application.bot_data.get("statuses", {}).pop(sid, None)
             deleted += 1
-        except Exception:
-            errors += 1
+        except Exception as exc:
+            proj = Path(directory).name if directory else "?"
+            failed.append(f"`{proj}` / `{sid[:12]}` — {exc}")
 
     db.clear_active()
 
-    msg = f"✅ {deleted} sesiones borradas del server."
-    if errors:
-        msg += f" ({errors} errores)"
-    await q.edit_message_text(msg)
+    lines = [f"✅ {deleted} sesiones borradas del server."]
+    if failed:
+        lines.append("")
+        lines.append(f"⚠️ {len(failed)} no se pudieron borrar:")
+        for f in failed[:5]:
+            lines.append(f"• {f}")
+        if len(failed) > 5:
+            lines.append(f"...y {len(failed)-5} más")
+
+    await q.edit_message_text("\n".join(lines), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -1918,11 +1943,12 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    await update.message.reply_text(f"📂 `{cwd_name}` · `{sess_title}`\n⏳ Cargando modelos...", parse_mode="Markdown")
+    loading_msg = await update.message.reply_text(f"📂 `{cwd_name}` · `{sess_title}`\n⏳ Cargando modelos...", parse_mode="Markdown")
 
     try:
         models = await _get_models(ctx)
     except Exception as exc:
+        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(f"❌ Error al cargar modelos: {exc}")
         return
 
@@ -1939,6 +1965,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
+    await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
     await update.message.reply_text(
         f"📂 `{cwd_name}` · `{sess_title}`\n📦 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
