@@ -796,6 +796,19 @@ async def sse_listener(app: Application) -> None:
                     if is_child:
                         continue
                     if st:
+                        # Verify with API that session is actually idle before finishing.
+                        # When a new session is created in the same project, OpenCode may
+                        # send stale idle events for other sessions. Double-check to avoid
+                        # prematurely finishing an active session.
+                        try:
+                            sess_info = await oc.get_session(effective_sid, directory=st.get("directory", ""))
+                            srv_status = sess_info.get("status") or {}
+                            srv_type = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
+                            if srv_type in ("busy", "retry"):
+                                logger.info(f"Ignoring stale idle event for {effective_sid[:12]} (server says {srv_type})")
+                                continue
+                        except Exception:
+                            pass  # If API unreachable, proceed with idle (safe default)
                         await _finish_status(app, effective_sid)
                 continue
 
@@ -803,6 +816,16 @@ async def sse_listener(app: Application) -> None:
                 if sid != effective_sid:
                     continue
                 if st:
+                    # Same stale-event protection as session.status idle
+                    try:
+                        sess_info = await oc.get_session(effective_sid, directory=st.get("directory", ""))
+                        srv_status = sess_info.get("status") or {}
+                        srv_type = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
+                        if srv_type in ("busy", "retry"):
+                            logger.info(f"Ignoring stale session.idle for {effective_sid[:12]} (server says {srv_type})")
+                            continue
+                    except Exception:
+                        pass
                     await _finish_status(app, effective_sid)
                 continue
 
@@ -2513,8 +2536,9 @@ async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
     else:
-        # Already in send mode — acknowledge before showing picker
-        await update.message.reply_text("📤 Modo send activo.", parse_mode="Markdown")
+        # Already in send mode — just acknowledge, don't show picker
+        await update.message.reply_text("📤 Modo send activo.")
+        return
     
     try:
         all_sessions = await oc.list_sessions()
