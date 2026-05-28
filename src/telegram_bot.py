@@ -555,15 +555,9 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
     question and send them to Telegram. The session stays paused until the
     user answers.
 
-    props structure:
-      {
-        "id": "que...",
-        "sessionID": "ses...",
-        "questions": [
-          { "header": "...", "question": "...", "options": [{"label":"..","description":".."},...],
-            "multiple": false, "custom": true }
-        ]
-      }
+    Supports multiple questions in a single event — answers are accumulated
+    and sent only when all questions are answered, or the user presses
+    "Enviar ahora" for partial answers.
     """
     req_id    = props.get("id", "")
     session_id = props.get("sessionID", "")
@@ -583,10 +577,11 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
         if active and active.get("session_id") == session_id:
             directory = active.get("directory", "")
     if not directory:
-        # Fallback: any active session
         active = db.get_active()
         if active:
             directory = active.get("directory", "")
+
+    n = len(questions)
 
     # Store pending question state
     pending = app.bot_data.setdefault("pending_questions", {})
@@ -594,7 +589,7 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
         "session_id": session_id,
         "directory":  directory,
         "questions":  questions,
-        "answers":    [None] * len(questions),  # one answer per question slot
+        "answers":    [None] * n,
         "msg_ids":    [],
     }
 
@@ -624,35 +619,139 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
                 callback_data=f"qans:{rk}:{sk}:{q_idx}:{ok}",
             )])
 
-        # Custom answer + cancel row
+        # Custom answer row
         if custom:
             ck = _key_raw(app.bot_data, f"{req_id}|{q_idx}|custom")
             btns.append([InlineKeyboardButton(
                 "✏️ Escribe tu propia respuesta",
                 callback_data=f"qcustom:{rk}:{sk}:{q_idx}",
             )])
+
+        # If multiple questions, add "Enviar ahora" for partial answers
+        # and cancel row
+        if n > 1:
+            btns.append([InlineKeyboardButton(
+                "📨 Enviar ahora",
+                callback_data=f"qsendnow:{rk}:{sk}",
+            )])
         btns.append([InlineKeyboardButton(
             "❌ Cancelar pregunta",
             callback_data=f"qreject:{rk}:{sk}",
         )])
 
+        suffix = f" ({q_idx+1}/{n})" if n > 1 else ""
         try:
             sent = await app.bot.send_message(
                 ADMIN_ID,
-                f"❓ *{md2tgv2._escape(header)}*\n\n{md2tgv2._escape(question)}",
+                f"❓ *{md2tgv2._escape(header)}{md2tgv2._escape(suffix)}*\n\n{md2tgv2._escape(question)}",
                 parse_mode="MarkdownV2",
                 reply_markup=InlineKeyboardMarkup(btns),
             )
         except Exception:
-            # Fallback: send as plain text if escaping still fails
             sent = await app.bot.send_message(
                 ADMIN_ID,
-                f"❓ {header}\n\n{question}",
+                f"❓ {header}{suffix}\n\n{question}",
                 reply_markup=InlineKeyboardMarkup(btns),
             )
         msg_ids.append(sent.message_id)
 
     pending[req_id]["msg_ids"] = msg_ids
+
+
+def _all_questions_answered(q_data: dict) -> bool:
+    """Check if all questions have been answered."""
+    return all(a is not None for a in q_data.get("answers", []))
+
+
+async def _refresh_question_buttons(app: Application, req_id: str) -> None:
+    """Update inline keyboards to show answered state and remaining count."""
+    q_data = app.bot_data.get("pending_questions", {}).get(req_id)
+    if not q_data:
+        return
+
+    rk = _key_raw(app.bot_data, req_id)
+    sk = _key_raw(app.bot_data, q_data["session_id"])
+    answers = q_data["answers"]
+    questions = q_data["questions"]
+    n = len(questions)
+    answered_count = sum(1 for a in answers if a is not None)
+
+    for q_idx, (q, msg_id) in enumerate(zip(questions, q_data["msg_ids"])):
+        if answers[q_idx] is not None:
+            # Already answered — show result and disable buttons
+            ans_text = ", ".join(answers[q_idx]) if isinstance(answers[q_idx], list) else str(answers[q_idx])
+            try:
+                await app.bot.edit_message_text(
+                    chat_id=ADMIN_ID, message_id=msg_id,
+                    text=f"✅ *{md2tgv2._escape(q.get('header', f'Pregunta {q_idx+1}'))}*\n\n{md2tgv2._escape(ans_text)}",
+                    parse_mode="MarkdownV2",
+                    reply_markup=None,
+                )
+            except Exception:
+                try:
+                    await app.bot.edit_message_text(
+                        chat_id=ADMIN_ID, message_id=msg_id,
+                        text=f"✅ {q.get('header', f'Pregunta {q_idx+1}')}\n\n{ans_text}",
+                        reply_markup=None,
+                    )
+                except Exception:
+                    pass
+            continue
+
+        # Still pending — rebuild buttons
+        header   = q.get("header", f"Pregunta {q_idx+1}")
+        question = q.get("question", "")
+        options  = q.get("options", [])
+        custom   = q.get("custom", True)
+
+        btns = []
+        for opt_idx, opt in enumerate(options):
+            label = opt.get("label", "")
+            desc  = opt.get("description", "")
+            ok    = _key_raw(app.bot_data, f"{req_id}|{q_idx}|{opt_idx}|{label}")
+            btn_text = f"{label}"
+            if desc and len(desc) < 40:
+                btn_text = f"{label} — {desc}"
+            btns.append([InlineKeyboardButton(
+                btn_text[:64],
+                callback_data=f"qans:{rk}:{sk}:{q_idx}:{ok}",
+            )])
+
+        if custom:
+            ck = _key_raw(app.bot_data, f"{req_id}|{q_idx}|custom")
+            btns.append([InlineKeyboardButton(
+                "✏️ Escribe tu propia respuesta",
+                callback_data=f"qcustom:{rk}:{sk}:{q_idx}",
+            )])
+
+        remaining = n - answered_count
+        if n > 1:
+            btns.append([InlineKeyboardButton(
+                f"📨 Enviar ahora ({answered_count}/{n})",
+                callback_data=f"qsendnow:{rk}:{sk}",
+            )])
+        btns.append([InlineKeyboardButton(
+            "❌ Cancelar pregunta",
+            callback_data=f"qreject:{rk}:{sk}",
+        )])
+
+        suffix = f" ({q_idx+1}/{n})" if n > 1 else ""
+        try:
+            await app.bot.edit_message_text(
+                chat_id=ADMIN_ID, message_id=msg_id,
+                text=f"❓ *{md2tgv2._escape(header)}{md2tgv2._escape(suffix)}*\n\n{md2tgv2._escape(question)}",
+                parse_mode="MarkdownV2",
+                reply_markup=InlineKeyboardMarkup(btns),
+            )
+        except Exception:
+            try:
+                await app.bot.edit_message_text(
+                    chat_id=ADMIN_ID, message_id=msg_id,
+                    text=f"❓ {header}{suffix}\n\n{question}",
+                    reply_markup=InlineKeyboardMarkup(btns),
+                )
+            except Exception:
+                pass
 
 
 # SSE listener — global, no DB filtering
@@ -1530,7 +1629,7 @@ async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     req_id     = _val(ctx, rk)
     session_id = _val(ctx, sk)
-    opt_str    = _val(ctx, ok)   # "req_id|q_idx|opt_idx|label"
+    opt_str    = _val(ctx, ok)
     label      = opt_str.split("|", 3)[-1] if "|" in opt_str else opt_str
 
     pending = ctx.bot_data.get("pending_questions", {})
@@ -1539,15 +1638,21 @@ async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("⚠️ Pregunta ya respondida o expirada.")
         return
 
-    questions   = q_data["questions"]
+    questions = q_data["questions"]
     n_questions = len(questions)
 
-    # Record answer and send immediately — each question.asked event has
-    # exactly one question in practice; the multi-question array is unused.
+    # Record answer
     q_data["answers"][q_idx] = [label]
-    filled = [a if a is not None else [] for a in q_data["answers"]]
-    await q.edit_message_text(f"✅ *{label}*", parse_mode="Markdown")
-    await _send_question_answer(ctx.application, req_id, session_id, filled)
+
+    if n_questions == 1 or _all_questions_answered(q_data):
+        # Single question or all answered — send immediately
+        filled = [a if a is not None else [] for a in q_data["answers"]]
+        await q.edit_message_text(f"✅ *{label}*", parse_mode="Markdown")
+        await _send_question_answer(ctx.application, req_id, session_id, filled)
+    else:
+        # Multiple questions — just mark this one and refresh remaining buttons
+        await q.edit_message_text(f"✅ *{label}*", parse_mode="Markdown")
+        await _refresh_question_buttons(ctx.application, req_id)
 
 
 async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -1563,8 +1668,10 @@ async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("⚠️ Pregunta ya respondida o expirada.")
         return
 
+    answered = sum(1 for a in q_data["answers"] if a is not None)
+    total = len(q_data["answers"])
     filled_answers = [a if a is not None else [] for a in q_data["answers"]]
-    await q.edit_message_text("📨 Enviando respuestas parciales...")
+    await q.edit_message_text(f"📨 Enviando {answered}/{total} respuestas...")
     await _send_question_answer(ctx.application, req_id, session_id, filled_answers)
 
 
@@ -2353,9 +2460,15 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             q_data     = pending.get(req_id)
             if q_data:
                 q_data["answers"][q_idx] = [text]
-                filled = [a if a is not None else [] for a in q_data["answers"]]
-                await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
-                await _send_question_answer(ctx.application, req_id, session_id, filled)
+                n_questions = len(q_data["questions"])
+
+                if n_questions == 1 or _all_questions_answered(q_data):
+                    filled = [a if a is not None else [] for a in q_data["answers"]]
+                    await update.message.reply_text(f"✅ Respuesta enviada: `{text}`", parse_mode="Markdown")
+                    await _send_question_answer(ctx.application, req_id, session_id, filled)
+                else:
+                    await update.message.reply_text(f"✅ Respuesta registrada. Quedan {n_questions - sum(1 for a in q_data['answers'] if a is not None)} pregunta(s) por responder.", parse_mode="Markdown")
+                    await _refresh_question_buttons(ctx.application, req_id)
             else:
                 await update.message.reply_text("⚠️ La pregunta ya fue respondida o expiró.")
             return
