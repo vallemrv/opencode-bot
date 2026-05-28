@@ -743,10 +743,18 @@ async def sse_listener(app: Application) -> None:
 
                 if state_type in ("busy", "retry"):
                     if not st:
+                        # Check if this session has a pending tracked entry (prompt was sent
+                        # but SSE busy event hasn't arrived yet). This enables concurrent
+                        # sessions in the same project.
+                        tracked = app.bot_data.get("tracked_sessions", {})
+                        tracked_info = tracked.get(sid) or tracked.get(effective_sid)
+
                         active_check = db.get_active()
                         is_active = active_check and active_check.get("session_id") == sid
-                        if not is_active and not is_child:
+
+                        if not is_active and not is_child and not tracked_info:
                             continue
+
                         try:
                             sess_info = await oc.get_session(sid)
                             directory = sess_info.get("directory", "")
@@ -757,23 +765,30 @@ async def sse_listener(app: Application) -> None:
                             )
                             sess_title = sess_info.get("title") or ""
                         except Exception:
-                            directory   = ""
+                            directory   = tracked_info.get("directory", "") if tracked_info else ""
                             model_label = "default"
                             sess_title  = ""
-                        cwd_name = Path(directory).name or "?"
-                        status_msg = await app.bot.send_message(
-                            ADMIN_ID,
-                            f"🔴 *BUSY* | 📂 `{cwd_name}` | 🧩 `{model_label}`\n"
-                            f"⏱ `00:00`\n\n"
-                            f"_Pulsa_ /esc _para cancelar_",
-                            parse_mode="Markdown",
-                            reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
-                            ]]),
-                        )
-                        _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
-                        _track_msg(app, status_msg.message_id, sid, directory)
-                        st = app.bot_data["statuses"].get(sid)
+
+                        # Reuse existing tracked message if available (avoids duplicate status msgs)
+                        if tracked_info and tracked_info.get("msg_id"):
+                            tracked_info["pending"] = False
+                            _start_status(app, effective_sid, directory or tracked_info.get("directory", ""), tracked_info["msg_id"], model=model_label, session_title=sess_title)
+                            st = app.bot_data["statuses"].get(effective_sid)
+                        else:
+                            cwd_name = Path(directory).name or "?"
+                            status_msg = await app.bot.send_message(
+                                ADMIN_ID,
+                                f"🔴 *BUSY* | 📂 `{cwd_name}` | 🧩 `{model_label}`\n"
+                                f"⏱ `00:00`\n\n"
+                                f"_Pulsa_ /esc _para cancelar_",
+                                parse_mode="Markdown",
+                                reply_markup=InlineKeyboardMarkup([[
+                                    InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+                                ]]),
+                            )
+                            _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
+                            _track_msg(app, status_msg.message_id, sid, directory)
+                            st = app.bot_data["statuses"].get(sid)
 
                     if st:
                         st["pending"] = False
@@ -827,6 +842,19 @@ async def sse_listener(app: Application) -> None:
                     except Exception:
                         pass
                     await _finish_status(app, effective_sid)
+                else:
+                    # Recover: missed busy event but may have a tracked waiting message
+                    tracked = app.bot_data.get("tracked_sessions", {})
+                    tracked_info = tracked.get(effective_sid) or tracked.get(sid)
+                    if tracked_info:
+                        try:
+                            sess_info = await oc.get_session(sid)
+                            directory = sess_info.get("directory", "") or tracked_info.get("directory", "")
+                        except Exception:
+                            directory = tracked_info.get("directory", "")
+                        _start_status(app, effective_sid, directory, tracked_info["msg_id"])
+                        await _finish_status(app, effective_sid)
+                        logger.info(f"Recovered session.idle finish for {effective_sid[:12]} (missed busy event)")
                 continue
 
             if etype == "session.error":
