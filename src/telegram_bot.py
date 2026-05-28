@@ -2512,6 +2512,9 @@ async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
+    else:
+        # Already in send mode — acknowledge before showing picker
+        await update.message.reply_text("📤 Modo send activo.", parse_mode="Markdown")
     
     try:
         all_sessions = await oc.list_sessions()
