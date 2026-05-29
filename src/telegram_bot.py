@@ -58,12 +58,13 @@ oc = OpenCodeClient(OC_HOST, OC_PORT)
 # ---------------------------------------------------------------------------
 
 MODELS_CACHE_TTL = 300
+MODELS_FETCH_TIMEOUT = 15
 
 async def _get_models(ctx: ContextTypes.DEFAULT_TYPE) -> list[dict]:
     cache = ctx.bot_data.get("models_cache")
     if cache and (time.time() - cache["ts"]) < MODELS_CACHE_TTL:
         return cache["data"]
-    models = await oc.list_models()
+    models = await asyncio.wait_for(oc.list_models(), timeout=MODELS_FETCH_TIMEOUT)
     ctx.bot_data["models_cache"] = {"ts": time.time(), "data": models}
     return models
 
@@ -1317,8 +1318,21 @@ async def _show_provider_picker(q, ctx, cwd: str | None, skip_loading: bool = Fa
 
     try:
         models = await _get_models(ctx)
+    except asyncio.TimeoutError:
+        await q.edit_message_text(
+            f"{header}❌ Timeout al cargar modelos. Verifica que OpenCode está corriendo.",
+            parse_mode="Markdown",
+        )
+        return
     except Exception as exc:
         await q.edit_message_text(f"❌ Error al cargar modelos: {exc}", parse_mode="Markdown")
+        return
+
+    if not models:
+        await q.edit_message_text(
+            f"{header}⚠️ No hay modelos disponibles. Configura un proveedor en OpenCode.",
+            parse_mode="Markdown",
+        )
         return
 
     groups: dict[str, list] = defaultdict(list)
@@ -1349,11 +1363,17 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     try:
         models = await _get_models(ctx)
+    except asyncio.TimeoutError:
+        await q.edit_message_text("❌ Timeout al cargar modelos.", parse_mode="Markdown")
+        return
     except Exception as exc:
         await q.edit_message_text(f"❌ Error: {exc}", parse_mode="Markdown")
         return
 
     mids = sorted([m.get("id") or m.get("modelID", "?") for m in models if m.get("providerID") == pid])
+    if not mids:
+        await q.edit_message_text(f"⚠️ No hay modelos para el proveedor `{pid}`.", parse_mode="Markdown")
+        return
     PER  = 6
     total_pages = max(1, (len(mids) + PER - 1) // PER)
     page  = max(0, min(page, total_pages - 1))
@@ -2101,13 +2121,34 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    loading_msg = await update.message.reply_text(f"📂 `{cwd_name}` · `{sess_title}`\n⏳ Cargando modelos...", parse_mode="Markdown")
+    # Sanitize sess_title to avoid Markdown parse errors
+    sess_title_md = sess_title.replace("`", "'").replace("*", "").replace("_", " ")
+
+    loading_msg = await update.message.reply_text(f"📂 `{cwd_name}` · `{sess_title_md}`\n⏳ Cargando modelos...", parse_mode="Markdown")
 
     try:
         models = await _get_models(ctx)
-    except Exception as exc:
+        logger.info(f"Loaded {len(models)} models for /models command")
+    except asyncio.TimeoutError:
         await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
-        await update.message.reply_text(f"❌ Error al cargar modelos: {exc}")
+        await update.message.reply_text(
+            "❌ Timeout al cargar modelos. El servidor OpenCode no responde.\n"
+            f"Verifica que `opencode serve` está corriendo en `{OC_HOST}:{OC_PORT}`.",
+            parse_mode="Markdown",
+        )
+        return
+    except BaseException as exc:
+        logger.error(f"cmd_models: error loading models ({type(exc).__name__}): {exc}", exc_info=True)
+        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await update.message.reply_text(f"❌ Error al cargar modelos: {type(exc).__name__}: {exc}")
+        raise
+
+    if not models:
+        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await update.message.reply_text(
+            "⚠️ No hay modelos disponibles. Configura al menos un proveedor en OpenCode.",
+            parse_mode="Markdown",
+        )
         return
 
     groups: dict[str, list] = defaultdict(list)
@@ -2125,7 +2166,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
     await update.message.reply_text(
-        f"📂 `{cwd_name}` · `{sess_title}`\n📦 Elige proveedor:",
+        f"📂 `{cwd_name}` · `{sess_title_md}`\n📦 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -2143,11 +2184,17 @@ async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     try:
         models = await _get_models(ctx)
+    except asyncio.TimeoutError:
+        await q.edit_message_text("❌ Timeout al cargar modelos.", parse_mode="Markdown")
+        return
     except Exception as exc:
         await q.edit_message_text(f"❌ Error: {exc}", parse_mode="Markdown")
         return
 
     mids = sorted([m.get("id") or m.get("modelID", "?") for m in models if m.get("providerID") == pid])
+    if not mids:
+        await q.edit_message_text(f"⚠️ No hay modelos para el proveedor `{pid}`.", parse_mode="Markdown")
+        return
     PER  = 6
     total_pages = max(1, (len(mids) + PER - 1) // PER)
     page  = max(0, min(page, total_pages - 1))
