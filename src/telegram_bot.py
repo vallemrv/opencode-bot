@@ -1840,7 +1840,7 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         projects = await oc.list_projects()
         all_sessions = await oc.list_sessions()
     except Exception as exc:
-        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(f"❌ Error: {exc}")
         return
 
@@ -1855,7 +1855,7 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     proj_by_wt = {p.get("worktree", ""): p for p in projects}
 
     if not by_dir:
-        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text("No hay proyectos con sesiones.")
         return
 
@@ -1872,7 +1872,7 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     total = sum(len(v) for v in by_dir.values())
-    await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+    await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
     await update.message.reply_text(
         f"Selecciona proyecto a quitar del bot, o cierra todo ({total} sesiones en {len(by_dir)} proyectos):",
         reply_markup=InlineKeyboardMarkup(btns),
@@ -2130,7 +2130,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         models = await _get_models(ctx)
         logger.info(f"Loaded {len(models)} models for /models command")
     except asyncio.TimeoutError:
-        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(
             "❌ Timeout al cargar modelos. El servidor OpenCode no responde.\n"
             f"Verifica que `opencode serve` está corriendo en `{OC_HOST}:{OC_PORT}`.",
@@ -2139,12 +2139,12 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     except BaseException as exc:
         logger.error(f"cmd_models: error loading models ({type(exc).__name__}): {exc}", exc_info=True)
-        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(f"❌ Error al cargar modelos: {type(exc).__name__}: {exc}")
         raise
 
     if not models:
-        await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+        await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(
             "⚠️ No hay modelos disponibles. Configura al menos un proveedor en OpenCode.",
             parse_mode="Markdown",
@@ -2164,7 +2164,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
-    await _delete_msg(update.message.bot, ADMIN_ID, loading_msg.message_id)
+    await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
     await update.message.reply_text(
         f"📂 `{cwd_name}` · `{sess_title_md}`\n📦 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
