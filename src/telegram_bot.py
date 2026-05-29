@@ -1308,7 +1308,7 @@ async def _show_provider_picker(q, ctx, cwd: str | None, skip_loading: bool = Fa
     cwd = None when changing the model of the active session (/models mode).
     skip_loading = True if the caller already showed a loading message.
     """
-    pk       = _key(ctx, cwd) if cwd else 0
+    pk       = _key(ctx, cwd) if cwd else -1
     cwd_name = Path(cwd).name if cwd else None
     header   = f"📂 `{cwd_name}`\n" if cwd_name else ""
 
@@ -1345,7 +1345,7 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     pid_k = int(parts[2])
     page  = int(parts[3]) if len(parts) > 3 else 0
     pid   = _val(ctx, pid_k)
-    cwd   = _val(ctx, pk) if pk != 0 else None
+    cwd   = _val(ctx, pk) if pk != -1 else None
 
     try:
         models = await _get_models(ctx)
@@ -1381,7 +1381,7 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if cwd:
         btns.append([InlineKeyboardButton("⬅ Proveedores", callback_data=f"os:{pk}")])
     else:
-        btns.append([InlineKeyboardButton("⬅ Proveedores", callback_data=f"prov:0:0:0")])
+        btns.append([InlineKeyboardButton("⬅ Proveedores", callback_data=f"prov:-1:0:0")])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await q.edit_message_text(
@@ -1394,8 +1394,8 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """
     Shared model-selected handler.
-    pk == 0  → /models mode: update model of active session.
-    pk != 0  → wizard mode: create new session in cwd.
+    pk == -1 → /models mode: update model of active session.
+    pk != -1 → wizard mode: create new session in cwd.
     """
     q = update.callback_query; await q.answer()
     parts     = q.data.split(":")
@@ -1403,7 +1403,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     model_str = _val(ctx, int(parts[2]))
     pid, mid  = model_str.split("|", 1) if "|" in model_str else ("", "")
 
-    if pk == 0:
+    if pk == -1:
         # /models mode — store pending model, applied on next prompt
         active = db.get_active()
         if not active:
