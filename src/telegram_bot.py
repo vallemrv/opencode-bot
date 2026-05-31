@@ -401,6 +401,8 @@ async def _finish_status(app: Application, session_id: str):
         if len(files_edited) > 3:
             files_str += md2tgv2._escape(f" +{len(files_edited)-3}")
 
+    sess_title = st.get("session_title", "") if st else ""
+
     header_parts = [f"✅ `{md2tgv2._escape(cwd_name)}`"]
     if app.bot_data.get("send_target"):
         header_parts.append("📤")
@@ -411,6 +413,8 @@ async def _finish_status(app: Application, session_id: str):
     header_line = " \\| ".join(header_parts)
     if files_str:
         header_line += files_str
+    if sess_title:
+        header_line += f"\n📌 `{md2tgv2._escape(sess_title[:40])}`"
 
     if not reply_text:
         sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo\\._", parse_mode="MarkdownV2")
