@@ -134,6 +134,14 @@ def _format_elapsed(seconds: float) -> str:
     secs = int(seconds % 60)
     return f"{mins:02d}:{secs:02d}"
 
+def _format_cost(cost: float) -> str:
+    """Approximate session cost in USD. Shows extra precision for tiny amounts."""
+    if cost >= 1:
+        return f"${cost:.2f}"
+    if cost > 0:
+        return f"${cost:.4f}"
+    return "$0"
+
 # ---------------------------------------------------------------------------
 # Status tracking
 # ---------------------------------------------------------------------------
@@ -419,7 +427,14 @@ async def _finish_status(app: Application, session_id: str):
         model_id     = model_obj.get("id", "")
 
         total_tokens = 0
+        total_cost = 0.0
         if fetched_messages:
+            for m in fetched_messages:
+                info = m.get("info", {})
+                if info.get("role") == "assistant":
+                    c = info.get("cost")
+                    if isinstance(c, (int, float)):
+                        total_cost += c
             for m in reversed(fetched_messages):
                 info = m.get("info", {})
                 if info.get("role") == "assistant":
@@ -435,9 +450,10 @@ async def _finish_status(app: Application, session_id: str):
             if ctx_limit and ctx_limit > 0 and total_tokens > 0:
                 pct = round(total_tokens / ctx_limit * 100, 1)
                 ctx_str = f" ctx {pct}%"
+        cost_str = f" 💰{_format_cost(total_cost)}"
         if model_short:
             # MarkdownV2: backtick code + escaped plain text
-            model_info = f"`{md2tgv2._escape(model_short)}`{md2tgv2._escape(ctx_str)}"
+            model_info = f"`{md2tgv2._escape(model_short)}`{md2tgv2._escape(ctx_str + cost_str)}"
     except Exception as exc:
         logger.warning(f"Could not get session info for footer: {exc}")
 
