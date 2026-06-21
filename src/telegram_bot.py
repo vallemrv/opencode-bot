@@ -250,6 +250,15 @@ def _build_status_text(st: dict) -> str:
         snippet = reasoning[-200:].replace("`", "'").replace("*", "").strip()
         lines.append(f"💭 _{snippet}_")
 
+    msg_costs  = st.get("msg_costs", {})
+    total_cost = sum(v for v in msg_costs.values() if isinstance(v, (int, float)))
+    ctx_tokens = st.get("ctx_tokens", 0)
+    ctx_limit  = st.get("ctx_limit") or 0
+    meta = f"💰 {_format_cost(total_cost)}"
+    if ctx_limit > 0 and ctx_tokens > 0:
+        meta += f" · 🧠 {round(ctx_tokens / ctx_limit * 100, 1)}%"
+    lines.append(meta)
+
     lines.append("")
     lines.append("_Pulsa_ /esc _para cancelar_")
     return "\n".join(lines)
@@ -325,6 +334,9 @@ def _start_status(app: Application, session_id: str, directory: str, msg_id: int
         "last_update_time": time.time(),
         "tokens_input": 0,
         "tokens_output": 0,
+        "msg_costs": {},     # message_id -> cost (USD) reportado por OpenCode
+        "ctx_tokens": 0,     # tokens del último mensaje assistant (input+cache)
+        "ctx_limit": None,   # límite de contexto del modelo, cacheado una vez
     }
     if not app.job_queue.get_jobs_by_name("status_heartbeat"):
         app.job_queue.run_repeating(
@@ -1203,10 +1215,24 @@ async def sse_listener(app: Application) -> None:
             if etype == "message.updated":
                 info = props.get("info", {})
                 if info.get("role") == "assistant" and st:
-                    tokens = info.get("tokens", {})
+                    tokens = info.get("tokens", {}) or {}
                     if tokens:
                         st["tokens_input"]  = tokens.get("input", 0)
                         st["tokens_output"] = tokens.get("output", 0)
+                        cache = tokens.get("cache", {}) or {}
+                        st["ctx_tokens"] = (tokens.get("input", 0) or 0) + (cache.get("read", 0) or 0) + (cache.get("write", 0) or 0)
+                    c = info.get("cost")
+                    if isinstance(c, (int, float)):
+                        mid = info.get("id") or "current"
+                        st.setdefault("msg_costs", {})[mid] = c
+                    if st.get("ctx_limit") is None:
+                        pid = info.get("providerID", "")
+                        mdl = info.get("modelID", "")
+                        if pid and mdl:
+                            try:
+                                st["ctx_limit"] = await oc.get_model_context_limit(pid, mdl) or 0
+                            except Exception:
+                                st["ctx_limit"] = 0
                     st["message_count"] = st.get("message_count", 0) + 1
                     await _update_status_now(app, effective_sid)
                 continue
