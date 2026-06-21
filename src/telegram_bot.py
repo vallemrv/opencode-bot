@@ -3236,8 +3236,29 @@ def main():
     app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE, handle_audio_upload))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
+    def _on_sse_done(fut):
+        # Relaunch the SSE listener if it ever exits unexpectedly (not on shutdown).
+        if fut.cancelled() or app.bot_data.get("_sse_stop"):
+            return
+        exc = fut.exception()
+        if exc is not None:
+            logger.error(f"SSE listener crashed: {exc!r}; relaunching in 5s")
+        else:
+            logger.warning("SSE listener exited unexpectedly; relaunching in 5s")
+
+        async def _relaunch():
+            await asyncio.sleep(5)
+            if app.bot_data.get("_sse_stop"):
+                return
+            new_task = asyncio.ensure_future(sse_listener(app))
+            new_task.add_done_callback(_on_sse_done)
+            app.bot_data["_sse_task"] = new_task
+
+        asyncio.ensure_future(_relaunch())
+
     async def _start_sse(c):
         task = asyncio.ensure_future(sse_listener(app))
+        task.add_done_callback(_on_sse_done)
         app.bot_data["_sse_task"] = task
 
     app.job_queue.run_once(_start_sse, when=1)
@@ -3301,6 +3322,7 @@ def main():
     app.post_init = post_init
 
     async def post_shutdown(application: Application):
+        application.bot_data["_sse_stop"] = True
         task = application.bot_data.get("_sse_task")
         if task and not task.done():
             task.cancel()
