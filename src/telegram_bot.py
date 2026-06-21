@@ -285,6 +285,10 @@ async def _update_status_now(app: Application, session_id: str, force: bool = Fa
             )
         except Exception:
             pass
+    except Exception as exc:
+        # Forbidden / TimedOut / NetworkError, etc. — never let a live-update
+        # failure kill the heartbeat tick or the SSE listener.
+        logger.warning(f"Status update failed for {session_id[:12]}: {exc}")
 
 
 async def _heartbeat_loop(ctx: ContextTypes.DEFAULT_TYPE):
@@ -474,7 +478,15 @@ async def _finish_status(app: Application, session_id: str):
         plain_header += f"\n{sess_title[:40]}"
 
     if not reply_text:
-        sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo\\._", parse_mode="MarkdownV2")
+        try:
+            sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo\\._", parse_mode="MarkdownV2")
+        except Exception as exc:
+            logger.warning(f"Final 'Listo' send failed ({exc}), retrying as plain text")
+            try:
+                sent = await app.bot.send_message(ADMIN_ID, f"{plain_header}\nListo.")
+            except Exception as exc2:
+                logger.error(f"Failed to send final 'Listo' reply: {exc2}")
+                return
         _track_msg(app, sent.message_id, session_id, directory or "")
         return
 
@@ -575,17 +587,25 @@ async def _drain_queue(app: Application, session_id: str):
         sess_title = session_id[:12]
         model_short = ""
 
-    sent = await app.bot.send_message(
-        ADMIN_ID,
-        f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
-        f"📦 `{sess_title[:16]}`\n"
-        f"🧩 `{model_short or '...'}` | ⏱ `00:00`\n\n"
-        f"_Pulsa_ /esc _para cancelar_",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
-        ]]),
-    )
+    try:
+        sent = await app.bot.send_message(
+            ADMIN_ID,
+            f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
+            f"📦 `{sess_title[:16]}`\n"
+            f"🧩 `{model_short or '...'}` | ⏱ `00:00`\n\n"
+            f"_Pulsa_ /esc _para cancelar_",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+            ]]),
+        )
+    except Exception as exc:
+        logger.error(f"Failed to send WAITING msg for queued prompt ({exc}); dropping item")
+        try:
+            await app.bot.send_message(ADMIN_ID, f"❌ No pude encolar el siguiente mensaje de `{cwd_name}`: {exc}", parse_mode="Markdown")
+        except Exception:
+            pass
+        return
     _start_status(app, session_id, directory, sent.message_id, model=model_short, session_title=sess_title, pending=True)
     _track_msg(app, sent.message_id, session_id, directory)
 
