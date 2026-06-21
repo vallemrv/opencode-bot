@@ -1333,6 +1333,54 @@ async def cb_os(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await _show_provider_picker(q, ctx, cwd)
 
 
+class _MsgEditShim:
+    """Adapta un Message ya enviado a la interfaz CallbackQuery.edit_message_text,
+    para reutilizar los helpers del wizard de /open desde un comando normal."""
+    def __init__(self, bot, chat_id: int, message_id: int):
+        self._bot = bot
+        self._chat_id = chat_id
+        self._message_id = message_id
+
+    async def edit_message_text(self, text, **kwargs):
+        return await self._bot.edit_message_text(
+            chat_id=self._chat_id, message_id=self._message_id, text=text, **kwargs
+        )
+
+
+TMP_DIR = "/tmp/opencode-telegram"
+
+
+@admin_only
+async def cmd_tmp(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Crea /tmp/opencode-telegram y abre el wizard de sesión sobre él."""
+    if not await _server_ok(update.message.reply_text):
+        return
+    if _clear_send_mode(ctx.bot_data):
+        await update.message.reply_text("📤 Modo send desactivado.", parse_mode="Markdown")
+
+    try:
+        Path(TMP_DIR).mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        await update.message.reply_text(f"❌ No pude crear `{TMP_DIR}`: {exc}", parse_mode="Markdown")
+        return
+
+    sent = await update.message.reply_text(
+        f"📂 `{TMP_DIR}`\n⏳ Consultando OpenCode...", parse_mode="Markdown"
+    )
+    q = _MsgEditShim(ctx.bot, sent.chat_id, sent.message_id)
+
+    try:
+        sessions = await oc.list_sessions(directory=TMP_DIR)
+    except Exception as exc:
+        await q.edit_message_text(f"❌ Error: {exc}", parse_mode="Markdown")
+        return
+
+    if sessions:
+        await _show_session_picker(q, ctx, TMP_DIR, sessions)
+    else:
+        await _show_provider_picker(q, ctx, TMP_DIR)
+
+
 async def _show_session_picker(q, ctx, cwd: str, sessions: list[dict]):
     """Show existing sessions for this project + option to create new one.
 
@@ -3208,6 +3256,7 @@ def main():
 
     app.add_handler(CommandHandler("start",    cmd_start))
     app.add_handler(CommandHandler("open",     cmd_open))
+    app.add_handler(CommandHandler("tmp",      cmd_tmp))
     app.add_handler(CommandHandler("close",    cmd_close))
     app.add_handler(CommandHandler("sessions", cmd_sessions))
     app.add_handler(CommandHandler("models",   cmd_models))
@@ -3284,6 +3333,7 @@ def main():
         await application.bot.set_my_commands([
             BotCommand("start",    "Estado y menú"),
             BotCommand("open",     "Abrir proyecto / sesión"),
+            BotCommand("tmp",      "Abrir sesión en /tmp/opencode-telegram"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("send",     "Enviar prompt a proyecto (modo persistente)"),
             BotCommand("endsend",  "Salir del modo send persistente"),
