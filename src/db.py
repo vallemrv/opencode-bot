@@ -4,6 +4,7 @@ Minimal: only tracks the active session (session_id + directory).
 All project/session data comes from the OpenCode API natively.
 """
 
+import asyncio
 import sqlite3
 from pathlib import Path
 
@@ -32,14 +33,18 @@ def init():
             pass
 
 
-def get_active() -> dict | None:
-    """Return {session_id, directory} or None."""
+def _get_active_sync() -> dict | None:
     with _conn() as con:
         row = con.execute("SELECT session_id, directory FROM active_session WHERE id = 1").fetchone()
         return dict(row) if row else None
 
 
-def set_active(session_id: str, directory: str):
+async def get_active() -> dict | None:
+    """Return {session_id, directory} or None."""
+    return await asyncio.to_thread(_get_active_sync)
+
+
+def _set_active_sync(session_id: str, directory: str) -> None:
     with _conn() as con:
         con.execute("""
             INSERT INTO active_session (id, session_id, directory)
@@ -48,6 +53,14 @@ def set_active(session_id: str, directory: str):
         """, (session_id, directory))
 
 
-def clear_active():
+async def set_active(session_id: str, directory: str) -> None:
+    await asyncio.to_thread(_set_active_sync, session_id, directory)
+
+
+def _clear_active_sync() -> None:
     with _conn() as con:
         con.execute("DELETE FROM active_session WHERE id = 1")
+
+
+async def clear_active() -> None:
+    await asyncio.to_thread(_clear_active_sync)

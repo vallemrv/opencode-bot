@@ -34,6 +34,8 @@ import transcription as grok_stt
 import md2tgv2
 from opencode_client import OpenCodeClient
 
+MAX_KS = 2000
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -88,8 +90,14 @@ def _key(ctx: ContextTypes.DEFAULT_TYPE, value: str) -> int:
     for k, v in store.items():
         if v == value:
             return k
-    k = len(store)
+    seq = ctx.bot_data.get("ks_seq")
+    if seq is None:
+        seq = max(store.keys()) + 1 if store else 0
+    k = seq
+    ctx.bot_data["ks_seq"] = seq + 1
     store[k] = value
+    while len(store) > MAX_KS:
+        store.pop(next(iter(store)))
     return k
 
 def _key_raw(bot_data: dict, value: str) -> int:
@@ -98,8 +106,14 @@ def _key_raw(bot_data: dict, value: str) -> int:
     for k, v in store.items():
         if v == value:
             return k
-    k = len(store)
+    seq = bot_data.get("ks_seq")
+    if seq is None:
+        seq = max(store.keys()) + 1 if store else 0
+    k = seq
+    bot_data["ks_seq"] = seq + 1
     store[k] = value
+    while len(store) > MAX_KS:
+        store.pop(next(iter(store)))
     return k
 
 def _val(ctx: ContextTypes.DEFAULT_TYPE, k: int) -> str:
@@ -165,7 +179,7 @@ def _track_msg(app: Application, message_id: int, session_id: str, directory: st
         store.popitem(last=False)
 
 
-def _resolve_target(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> dict | None:
+async def _resolve_target(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> dict | None:
     """
     Resolve which session a message targets.
     Priority: reply-to-bot-message > active session.
@@ -178,7 +192,7 @@ def _resolve_target(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> dict | No
         if target:
             return target
     # Fallback: active session
-    active = db.get_active()
+    active = await db.get_active()
     if active:
         return {"session_id": active["session_id"], "directory": active["directory"]}
     return None
@@ -328,15 +342,50 @@ async def _finish_status(app: Application, session_id: str):
     cached_text = st.get("final_text") if st else None
     directory   = st.get("directory") if st else None
 
+    # Clean up orphaned pending_perms and pending_questions for this session
+    pending_perms = app.bot_data.get("pending_perms", {})
+    for perm_key in list(pending_perms.keys()):
+        if pending_perms[perm_key].get("session_id") == session_id:
+            pdata = pending_perms.pop(perm_key)
+            try:
+                await app.bot.edit_message_reply_markup(
+                    chat_id=ADMIN_ID, message_id=pdata["msg_id"], reply_markup=None
+                )
+            except Exception:
+                pass
+
+    pending_questions = app.bot_data.get("pending_questions", {})
+    for q_key in list(pending_questions.keys()):
+        if pending_questions[q_key].get("session_id") == session_id:
+            qdata = pending_questions.pop(q_key)
+            for mid in qdata.get("msg_ids", []):
+                try:
+                    await app.bot.edit_message_reply_markup(
+                        chat_id=ADMIN_ID, message_id=mid, reply_markup=None
+                    )
+                except Exception:
+                    pass
+
     # Always fetch messages from API — it's the authoritative source for the full response.
     # final_text from SSE events may be incomplete (multi-step responses, partial deltas).
+    # Fetch messages and session data concurrently (they are independent).
     fetched_messages = None
+    session_data = None
     reply_text = None
     if directory:
-        try:
-            fetched_messages = await oc.get_messages(session_id, directory=directory)
-        except Exception as exc:
-            logger.error(f"Failed to get messages: {exc}")
+        results = await asyncio.gather(
+            oc.get_messages(session_id, directory=directory),
+            oc.get_session(session_id, directory=directory),
+            return_exceptions=True,
+        )
+        if isinstance(results[0], Exception):
+            logger.error(f"Failed to get messages: {results[0]}")
+        else:
+            fetched_messages = results[0]
+        if isinstance(results[1], Exception):
+            logger.warning(f"Could not get session data concurrently: {results[1]}")
+        else:
+            session_data = results[1]
 
     if fetched_messages:
         for m in reversed(fetched_messages):
@@ -359,7 +408,8 @@ async def _finish_status(app: Application, session_id: str):
     # Build model + context % info (reuse fetched_messages for token count)
     model_info = ""
     try:
-        session_data = await oc.get_session(session_id, directory=directory)
+        if session_data is None:
+            session_data = await oc.get_session(session_id, directory=directory)
         model_obj    = session_data.get("model") or {}
         provider_id  = model_obj.get("providerID", "")
         model_id     = model_obj.get("id", "")
@@ -416,6 +466,13 @@ async def _finish_status(app: Application, session_id: str):
     if sess_title:
         header_line += f"\n📌 `{md2tgv2._escape(sess_title[:40])}`"
 
+    # Plain-text header for fallback (no MarkdownV2 escaping, no backticks)
+    plain_header = f"✅ {cwd_name}"
+    if st and st.get("start_time"):
+        plain_header += f" ⏱{_format_elapsed(time.time() - st['start_time'])}"
+    if sess_title:
+        plain_header += f"\n{sess_title[:40]}"
+
     if not reply_text:
         sent = await app.bot.send_message(ADMIN_ID, f"{header_line}\n_Listo\\._", parse_mode="MarkdownV2")
         _track_msg(app, sent.message_id, session_id, directory or "")
@@ -446,6 +503,7 @@ async def _finish_status(app: Application, session_id: str):
     last_sent = None
     for i, chunk in enumerate(chunks):
         header = f"{header_line}\n" if i == 0 else ""
+        plain_hdr = f"{plain_header}\n" if i == 0 else ""
         kbd = None
         # Convert LLM markdown to Telegram MarkdownV2
         tg_chunk = md2tgv2.convert(chunk)
@@ -456,19 +514,21 @@ async def _finish_status(app: Application, session_id: str):
                 parse_mode="MarkdownV2",
                 reply_markup=kbd,
             )
+            if last_sent:
+                _track_msg(app, last_sent.message_id, session_id, directory or "")
         except BadRequest as e:
             logger.warning(f"MarkdownV2 parse failed ({e}), sending as plain text")
-            # Fallback: send raw text without any parse mode
+            # Fallback: send raw text without any parse mode, using plain header
             try:
                 last_sent = await app.bot.send_message(
                     ADMIN_ID,
-                    f"{header_line}\n{chunk}" if i == 0 else chunk,
+                    f"{plain_hdr}{chunk}",
                     reply_markup=kbd,
                 )
+                if last_sent:
+                    _track_msg(app, last_sent.message_id, session_id, directory or "")
             except Exception as exc2:
                 logger.error(f"Failed to send final reply chunk: {exc2}")
-    if last_sent:
-        _track_msg(app, last_sent.message_id, session_id, directory or "")
 
     # Clean up child sessions in OpenCode (they are independent copies, no context loss)
     if directory:
@@ -578,11 +638,11 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
     if st:
         directory = st.get("directory", "")
     if not directory:
-        active = db.get_active()
+        active = await db.get_active()
         if active and active.get("session_id") == session_id:
             directory = active.get("directory", "")
     if not directory:
-        active = db.get_active()
+        active = await db.get_active()
         if active:
             directory = active.get("directory", "")
 
@@ -659,6 +719,7 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
                 reply_markup=InlineKeyboardMarkup(btns),
             )
         msg_ids.append(sent.message_id)
+        _track_msg(app, sent.message_id, session_id, directory)
 
     pending[req_id]["msg_ids"] = msg_ids
 
@@ -847,16 +908,10 @@ async def sse_listener(app: Application) -> None:
 
                 if state_type in ("busy", "retry"):
                     if not st:
-                        # Check if this session has a pending tracked entry (prompt was sent
-                        # but SSE busy event hasn't arrived yet). This enables concurrent
-                        # sessions in the same project.
-                        tracked = app.bot_data.get("tracked_sessions", {})
-                        tracked_info = tracked.get(sid) or tracked.get(effective_sid)
-
-                        active_check = db.get_active()
+                        active_check = await db.get_active()
                         is_active = active_check and active_check.get("session_id") == sid
 
-                        if not is_active and not is_child and not tracked_info:
+                        if not is_active and not is_child:
                             continue
 
                         try:
@@ -869,30 +924,24 @@ async def sse_listener(app: Application) -> None:
                             )
                             sess_title = sess_info.get("title") or ""
                         except Exception:
-                            directory   = tracked_info.get("directory", "") if tracked_info else ""
+                            directory   = ""
                             model_label = "default"
                             sess_title  = ""
 
-                        # Reuse existing tracked message if available (avoids duplicate status msgs)
-                        if tracked_info and tracked_info.get("msg_id"):
-                            tracked_info["pending"] = False
-                            _start_status(app, effective_sid, directory or tracked_info.get("directory", ""), tracked_info["msg_id"], model=model_label, session_title=sess_title)
-                            st = app.bot_data["statuses"].get(effective_sid)
-                        else:
-                            cwd_name = Path(directory).name or "?"
-                            status_msg = await app.bot.send_message(
-                                ADMIN_ID,
-                                f"🔴 *BUSY* | 📂 `{cwd_name}` | 🧩 `{model_label}`\n"
-                                f"⏱ `00:00`\n\n"
-                                f"_Pulsa_ /esc _para cancelar_",
-                                parse_mode="Markdown",
-                                reply_markup=InlineKeyboardMarkup([[
-                                    InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
-                                ]]),
-                            )
-                            _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
-                            _track_msg(app, status_msg.message_id, sid, directory)
-                            st = app.bot_data["statuses"].get(sid)
+                        cwd_name = Path(directory).name or "?"
+                        status_msg = await app.bot.send_message(
+                            ADMIN_ID,
+                            f"🔴 *BUSY* | 📂 `{cwd_name}` | 🧩 `{model_label}`\n"
+                            f"⏱ `00:00`\n\n"
+                            f"_Pulsa_ /esc _para cancelar_",
+                            parse_mode="Markdown",
+                            reply_markup=InlineKeyboardMarkup([[
+                                InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+                            ]]),
+                        )
+                        _start_status(app, sid, directory, status_msg.message_id, model=model_label, session_title=sess_title)
+                        _track_msg(app, status_msg.message_id, sid, directory)
+                        st = app.bot_data["statuses"].get(sid)
 
                     if st:
                         st["pending"] = False
@@ -946,19 +995,6 @@ async def sse_listener(app: Application) -> None:
                     except Exception:
                         pass
                     await _finish_status(app, effective_sid)
-                else:
-                    # Recover: missed busy event but may have a tracked waiting message
-                    tracked = app.bot_data.get("tracked_sessions", {})
-                    tracked_info = tracked.get(effective_sid) or tracked.get(sid)
-                    if tracked_info:
-                        try:
-                            sess_info = await oc.get_session(sid)
-                            directory = sess_info.get("directory", "") or tracked_info.get("directory", "")
-                        except Exception:
-                            directory = tracked_info.get("directory", "")
-                        _start_status(app, effective_sid, directory, tracked_info["msg_id"])
-                        await _finish_status(app, effective_sid)
-                        logger.info(f"Recovered session.idle finish for {effective_sid[:12]} (missed busy event)")
                 continue
 
             if etype == "session.error":
@@ -967,11 +1003,12 @@ async def sse_listener(app: Application) -> None:
                     error_msg = error.get("data", {}).get("message", str(error))
                     st["state"] = "error"
                     await _update_status_now(app, effective_sid, force=True)
-                    await app.bot.send_message(
+                    err_sent = await app.bot.send_message(
                         ADMIN_ID,
                         f"❌ *Error* `{sid[:12]}`:\n{error_msg}",
                         parse_mode="Markdown",
                     )
+                    _track_msg(app, err_sent.message_id, sid, st.get("directory", ""))
                     await _finish_status(app, effective_sid)
                 continue
 
@@ -989,7 +1026,7 @@ async def sse_listener(app: Application) -> None:
                 if p_st:
                     p_dir = p_st.get("directory", "")
                 if not p_dir:
-                    active = db.get_active()
+                    active = await db.get_active()
                     if active and active.get("session_id") == p_sid:
                         p_dir = active.get("directory", "")
 
@@ -1041,6 +1078,7 @@ async def sse_listener(app: Application) -> None:
                     "session_id": p_sid,
                     "directory": p_dir,
                 }
+                _track_msg(app, perm_msg.message_id, p_sid, p_dir)
                 continue
 
             if etype == "permission.replied":
@@ -1269,7 +1307,7 @@ async def _show_session_picker(q, ctx, cwd: str, sessions: list[dict]):
     """
     cwd_path = Path(cwd)
     pk = _key(ctx, cwd)
-    active = db.get_active()
+    active = await db.get_active()
     active_sid = (active or {}).get("session_id")
 
     # Build parent→children map
@@ -1429,7 +1467,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if pk == -1:
         # /models mode — store pending model, applied on next prompt
-        active = db.get_active()
+        active = await db.get_active()
         if not active:
             await q.edit_message_text("⚠️ No hay sesión activa.")
             return
@@ -1458,7 +1496,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         sid         = sess.get("id", "")
         title       = sess.get("title") or sid[:12]
         model_label = f"{pid}/{mid}" if pid and mid else (pid or "default")
-        db.set_active(sid, cwd)
+        await db.set_active(sid, cwd)
 
         # If this session was created from the /send flow
         send_new_dir = ctx.bot_data.pop("send_new_sess_dir", None)
@@ -1515,7 +1553,7 @@ async def cb_actsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    db.set_active(sid, cwd)
+    await db.set_active(sid, cwd)
     cwd_name = Path(cwd).name or "?"
 
     model_label = "default"
@@ -1585,9 +1623,9 @@ async def _do_delete_session(q, ctx, sid: str, cwd: str, pk):
 
     ctx.application.bot_data.get("statuses", {}).pop(sid, None)
 
-    active = db.get_active()
+    active = await db.get_active()
     if active and active.get("session_id") == sid:
-        db.clear_active()
+        await db.clear_active()
 
     # Refresh picker if we know the cwd
     if cwd:
@@ -1924,9 +1962,9 @@ async def cb_closedel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    active = db.get_active()
+    active = await db.get_active()
     if active and active.get("directory") == directory:
-        db.clear_active()
+        await db.clear_active()
 
     await q.edit_message_text(
         f"✅ `{Path(directory).name}` cerrado — {deleted} sesiones borradas de OpenCode.",
@@ -1940,9 +1978,9 @@ async def cb_closebot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ck        = int(q.data.split(":")[1])
     directory = _val(ctx, ck)
 
-    active = db.get_active()
+    active = await db.get_active()
     if active and active.get("directory") == directory:
-        db.clear_active()
+        await db.clear_active()
 
     await q.edit_message_text(
         f"✅ `{Path(directory).name}` quitado del bot (sesiones siguen en OpenCode).",
@@ -1975,7 +2013,7 @@ async def cb_closeall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             proj = Path(directory).name if directory else "?"
             failed.append(f"`{proj}` / `{sid[:12]}` — {exc}")
 
-    db.clear_active()
+    await db.clear_active()
 
     lines = [f"✅ {deleted} sesiones borradas del server."]
     if failed:
@@ -2014,7 +2052,7 @@ async def cmd_sessions(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
         return
 
-    active     = db.get_active()
+    active     = await db.get_active()
     active_dir = (active or {}).get("directory", "")
 
     btns = []
@@ -2047,7 +2085,7 @@ async def cb_sesspick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"❌ Error: {exc}")
         return
 
-    active     = db.get_active()
+    active     = await db.get_active()
     active_sid = (active or {}).get("session_id", "")
     pk         = _key(ctx, directory)
 
@@ -2092,9 +2130,9 @@ async def cb_sda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"❌ Error: {exc}")
         return
 
-    active = db.get_active()
+    active = await db.get_active()
     if active and active.get("directory") == directory:
-        db.clear_active()
+        await db.clear_active()
 
     await q.edit_message_text(
         f"✅ Todas las sesiones de `{Path(directory).name}` borradas.",
@@ -2109,7 +2147,7 @@ async def cb_sda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 @admin_only
 async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Change model for the active session."""
-    active = db.get_active()
+    active = await db.get_active()
     if not active:
         await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
         return
@@ -2145,7 +2183,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         logger.error(f"cmd_models: error loading models ({type(exc).__name__}): {exc}", exc_info=True)
         await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
         await update.message.reply_text(f"❌ Error al cargar modelos: {type(exc).__name__}: {exc}")
-        raise
+        return
 
     if not models:
         await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
@@ -2275,7 +2313,7 @@ async def _do_abort(app: Application, sid: str, directory: str) -> str:
 
 @admin_only
 async def cmd_esc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    active = db.get_active()
+    active = await db.get_active()
     if not active:
         await update.message.reply_text("⚠️ No hay sesión activa.")
         return
@@ -2285,7 +2323,7 @@ async def cmd_esc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    active = db.get_active()
+    active = await db.get_active()
     if not active:
         await q.edit_message_text("⚠️ No hay sesión activa.")
         return
@@ -2320,7 +2358,7 @@ async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("❌ Tipo de archivo no soportado.")
         return
 
-    active = db.get_active()
+    active = await db.get_active()
     if not active:
         await msg.reply_text("❌ No hay sesión activa. Usa /open para abrir un proyecto.")
         return
@@ -2362,7 +2400,7 @@ async def handle_audio_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("❌ Tipo de audio no soportado.")
         return
 
-    active   = db.get_active()
+    active   = await db.get_active()
     cwd      = active["directory"] if active else None
     cwd_name = Path(cwd).name if cwd else None
 
@@ -2379,7 +2417,11 @@ async def handle_audio_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Move to cwd if there's an active session
     if cwd:
         final_path = Path(cwd) / file_name
-        shutil.move(str(tmp_path), str(final_path))
+        try:
+            shutil.move(str(tmp_path), str(final_path))
+        except Exception as exc:
+            await msg.reply_text(f"❌ Error al mover el audio: {exc}")
+            return
         saved_info = f"`{cwd_name}/{file_name}`"
     else:
         final_path = tmp_path
@@ -2527,14 +2569,21 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     # Check if this message is a reply to a bot message — always takes priority
     _reply_msg = update.message.reply_to_message
     _reply_target = None
+    _untracked_reply = False
     if _reply_msg and _reply_msg.from_user and _reply_msg.from_user.is_bot:
         _reply_target = ctx.bot_data.get("msg_to_session", {}).get(_reply_msg.message_id)
+        if _reply_target is None:
+            _untracked_reply = True
 
     if _reply_target:
         # Reply always bypasses send_mode and send_target
         sid       = _reply_target["session_id"]
         directory = _reply_target["directory"]
     else:
+        if _untracked_reply:
+            await update.message.reply_text(
+                "⚠️ No puedo enrutar este reply (mensaje antiguo o no rastreado). Usando la sesión activa."
+            )
         # /send flow: if in send mode, show wizard for each message
         send_mode = ctx.bot_data.get("send_mode")
         if send_mode:
@@ -2549,7 +2598,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             sid       = send_target["session_id"]
             directory = send_target["directory"]
         else:
-            target = _resolve_target(update, ctx)
+            target = await _resolve_target(update, ctx)
             if not target:
                 await update.message.reply_text(
                     "❌ No hay sesión activa. Usa /open para seleccionar un proyecto."
@@ -2636,7 +2685,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception as exc:
         # Clean up the status message if send failed
         await _delete_msg(ctx.bot, ADMIN_ID, sent.message_id)
-        tracked.pop(sid, None)
+        ctx.bot_data.get("statuses", {}).pop(sid, None)
         await update.message.reply_text(f"❌ Error al enviar: {exc}")
         return
 
@@ -2655,10 +2704,16 @@ async def cmd_restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     RESTART_FLAG.parent.mkdir(parents=True, exist_ok=True)
     RESTART_FLAG.write_text(str(msg.message_id))
 
-    import subprocess
     bot_root = Path(__file__).parent.parent.resolve()
-    subprocess.run(["git", "-C", str(bot_root), "pull"], capture_output=True)
-    subprocess.run(["sudo", "systemctl", "restart", "opencode-bot.service"])
+    git_proc = await asyncio.create_subprocess_exec(
+        "git", "-C", str(bot_root), "pull",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    await git_proc.communicate()
+    svc_proc = await asyncio.create_subprocess_exec(
+        "sudo", "systemctl", "restart", "opencode-bot.service",
+    )
+    await svc_proc.wait()
 
 
 @admin_only
@@ -2682,7 +2737,7 @@ async def cmd_projects(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
     proj_by_wt = {p.get("worktree", ""): p for p in projects}
-    active     = db.get_active()
+    active     = await db.get_active()
     active_dir = (active or {}).get("directory", "")
     active_sid = (active or {}).get("session_id", "")
 
@@ -2748,7 +2803,7 @@ async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
         return
 
-    active     = db.get_active()
+    active     = await db.get_active()
     active_dir = (active or {}).get("directory", "")
 
     btns = []
@@ -2779,7 +2834,7 @@ async def _show_send_session_picker(q, ctx, directory: str, sessions: list[dict]
     """Session picker for /send flow — same UI as _show_session_picker but uses send callbacks."""
     cwd_path  = Path(directory)
     dk        = _key(ctx, directory)
-    active    = db.get_active()
+    active    = await db.get_active()
     active_sid = (active or {}).get("session_id")
 
     # Build parent→children map
@@ -2982,9 +3037,9 @@ async def _do_send_delete_session(q, ctx, sid: str, directory: str, dk: int):
         return
 
     ctx.application.bot_data.get("statuses", {}).pop(sid, None)
-    active = db.get_active()
+    active = await db.get_active()
     if active and active.get("session_id") == sid:
-        db.clear_active()
+        await db.clear_active()
 
     try:
         sessions = await oc.list_sessions(directory=directory)
@@ -3049,7 +3104,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         connected = False
 
     status_icon = "✅" if connected else "❌"
-    active      = db.get_active()
+    active      = await db.get_active()
 
     if active:
         sid       = active["session_id"]
@@ -3186,7 +3241,7 @@ def main():
                 old_msg_id = int(RESTART_FLAG.read_text().strip())
                 RESTART_FLAG.unlink(missing_ok=True)
                 
-                active = db.get_active()
+                active = await db.get_active()
                 if active:
                     sid       = active["session_id"]
                     directory = active["directory"]

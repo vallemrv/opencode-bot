@@ -164,18 +164,20 @@ class OpenCodeClient:
         seen_ids: set[str] = set()
         sess_path = "/session?roots=true" if roots else "/session"
 
-        for d in dirs:
-            try:
-                sessions = await self._get(sess_path, directory=d)
-                for s in sessions:
-                    sid = s.get("id", "")
-                    if sid and sid not in seen_ids:
-                        seen_ids.add(sid)
-                        effective_dir = s.get("directory") or d
-                        s = {**s, "_worktree": effective_dir}
-                        all_sessions.append(s)
-            except Exception:
-                pass
+        results = await asyncio.gather(
+            *[self._get(sess_path, directory=d) for d in dirs],
+            return_exceptions=True,
+        )
+        for d, result in zip(dirs, results):
+            if isinstance(result, Exception):
+                continue
+            for s in result:
+                sid = s.get("id", "")
+                if sid and sid not in seen_ids:
+                    seen_ids.add(sid)
+                    effective_dir = s.get("directory") or d
+                    s = {**s, "_worktree": effective_dir}
+                    all_sessions.append(s)
 
         # Fallback: bare call in case DB is unavailable
         if not all_sessions:
