@@ -8,7 +8,7 @@ Architecture:
 - SSE /global/event streams events for all sessions across all projects.
 
 Flow:
-  /open  → browse folders → "Open here" → if project has sessions: session picker
+  /open  → browse folders → "Abrir aquí" → if project has sessions: session picker
                                         → new session: model picker → create
   text   → prompt_async → status message (live via SSE) → final reply
 """
@@ -1282,11 +1282,11 @@ def _folder_kbd(ctx, path: Path, page: int):
     if nav:
         btns.append(nav)
 
-    btns.append([InlineKeyboardButton("✅ Open here", callback_data=f"os:{pk}")])
+    btns.append([InlineKeyboardButton("✅ Abrir aquí", callback_data=f"os:{pk}")])
     btns.append([InlineKeyboardButton("📁 Nueva carpeta", callback_data=f"mkdir:{pk}")])
     parent = path.parent
     if parent != path:
-        btns.append([InlineKeyboardButton("⬆ Up", callback_data=f"ob:{_key(ctx,str(parent))}:0")])
+        btns.append([InlineKeyboardButton("⬆ Subir", callback_data=f"ob:{_key(ctx,str(parent))}:0")])
 
     return f"📂 `{path}`  _{page+1}/{total}_", InlineKeyboardMarkup(btns)
 
@@ -1373,38 +1373,40 @@ class _MsgEditShim:
         )
 
 
-TMP_DIR = "/tmp/opencode-telegram"
+# Carpeta de trabajo temporal para /tmp: vive en /tmp, el SO la borra al reiniciar.
+TMP_SESSION_DIR = "/tmp/opencode-telegram"
 
 
 @admin_only
 async def cmd_tmp(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Crea /tmp/opencode-telegram y abre el wizard de sesión sobre él."""
+    """Crea la carpeta temporal y abre el wizard de sesión sobre ella."""
     if not await _server_ok(update.message.reply_text):
         return
     if _clear_send_mode(ctx.bot_data):
         await update.message.reply_text("📤 Modo send desactivado.", parse_mode="Markdown")
 
+    cwd_name = Path(TMP_SESSION_DIR).name
     try:
-        Path(TMP_DIR).mkdir(parents=True, exist_ok=True)
+        Path(TMP_SESSION_DIR).mkdir(parents=True, exist_ok=True)
     except Exception as exc:
-        await update.message.reply_text(f"❌ No pude crear `{TMP_DIR}`: {exc}", parse_mode="Markdown")
+        await update.message.reply_text(f"❌ No pude crear `{cwd_name}`: {exc}", parse_mode="Markdown")
         return
 
     sent = await update.message.reply_text(
-        f"📂 `{TMP_DIR}`\n⏳ Consultando OpenCode...", parse_mode="Markdown"
+        f"📂 `{cwd_name}`\n⏳ Consultando OpenCode...", parse_mode="Markdown"
     )
     q = _MsgEditShim(ctx.bot, sent.chat_id, sent.message_id)
 
     try:
-        sessions = await oc.list_sessions(directory=TMP_DIR)
+        sessions = await oc.list_sessions(directory=TMP_SESSION_DIR)
     except Exception as exc:
         await q.edit_message_text(f"❌ Error: {exc}", parse_mode="Markdown")
         return
 
     if sessions:
-        await _show_session_picker(q, ctx, TMP_DIR, sessions)
+        await _show_session_picker(q, ctx, TMP_SESSION_DIR, sessions)
     else:
-        await _show_provider_picker(q, ctx, TMP_DIR)
+        await _show_provider_picker(q, ctx, TMP_SESSION_DIR)
 
 
 async def _show_session_picker(q, ctx, cwd: str, sessions: list[dict]):
@@ -1497,7 +1499,7 @@ async def _show_provider_picker(q, ctx, cwd: str | None, skip_loading: bool = Fa
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await q.edit_message_text(
-        f"{header}📦 Elige proveedor:",
+        f"{header}🔹 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -1557,7 +1559,7 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await q.edit_message_text(
-        f"🧩 *{pid}*  _{page+1}/{total_pages}_",
+        f"🔹 *{pid}*  _{page+1}/{total_pages}_",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -1579,7 +1581,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         # /models mode — store pending model, applied on next prompt
         active = await db.get_active()
         if not active:
-            await q.edit_message_text("⚠️ No hay sesión activa.")
+            await q.edit_message_text("⚠️ No hay sesión activa. Usa /open primero.")
             return
         sid       = active["session_id"]
         directory = active["directory"]
@@ -1843,7 +1845,7 @@ async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     answered = sum(1 for a in q_data["answers"] if a is not None)
     total = len(q_data["answers"])
     filled_answers = [a if a is not None else [] for a in q_data["answers"]]
-    await q.edit_message_text(f"📨 Enviando {answered}/{total} respuestas...")
+    await q.edit_message_text(f"⏳ Enviando {answered}/{total} respuestas...")
     await _send_question_answer(ctx.application, req_id, session_id, filled_answers)
 
 
@@ -2292,7 +2294,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except BaseException as exc:
         logger.error(f"cmd_models: error loading models ({type(exc).__name__}): {exc}", exc_info=True)
         await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
-        await update.message.reply_text(f"❌ Error al cargar modelos: {type(exc).__name__}: {exc}")
+        await update.message.reply_text(f"❌ Error al cargar modelos: {exc}")
         return
 
     if not models:
@@ -2318,7 +2320,7 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     await _delete_msg(ctx.bot, ADMIN_ID, loading_msg.message_id)
     await update.message.reply_text(
-        f"📂 `{cwd_name}` · `{sess_title_md}`\n📦 Elige proveedor:",
+        f"📂 `{cwd_name}` · `{sess_title_md}`\n🔹 Elige proveedor:",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -2371,7 +2373,7 @@ async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await q.edit_message_text(
-        f"🧩 *{pid}*  _{page+1}/{total_pages}_",
+        f"🔹 *{pid}*  _{page+1}/{total_pages}_",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -2425,7 +2427,7 @@ async def _do_abort(app: Application, sid: str, directory: str) -> str:
 async def cmd_esc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     active = await db.get_active()
     if not active:
-        await update.message.reply_text("⚠️ No hay sesión activa.")
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
         return
     msg = await _do_abort(ctx.application, active["session_id"], active["directory"])
     await update.message.reply_text(msg)
@@ -2435,7 +2437,7 @@ async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     active = await db.get_active()
     if not active:
-        await q.edit_message_text("⚠️ No hay sesión activa.")
+        await q.edit_message_text("⚠️ No hay sesión activa. Usa /open primero.")
         return
     msg = await _do_abort(ctx.application, active["session_id"], active["directory"])
     await q.edit_message_text(msg)
@@ -2470,7 +2472,7 @@ async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     active = await db.get_active()
     if not active:
-        await msg.reply_text("❌ No hay sesión activa. Usa /open para abrir un proyecto.")
+        await msg.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
         return
 
     cwd      = active["directory"]
@@ -2711,7 +2713,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             target = await _resolve_target(update, ctx)
             if not target:
                 await update.message.reply_text(
-                    "❌ No hay sesión activa. Usa /open para seleccionar un proyecto."
+                    "⚠️ No hay sesión activa. Usa /open primero."
                 )
                 return
             sid       = target["session_id"]
