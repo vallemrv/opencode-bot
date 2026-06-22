@@ -267,11 +267,14 @@ class OpenCodeClient:
         directory: str | None = None,
         provider_id: str | None = None,
         model_id: str | None = None,
+        variant: str | None = None,
     ) -> Any:
         """Fire-and-forget prompt. Response comes via SSE."""
         body: dict = {"parts": [{"type": "text", "text": text}]}
         if provider_id and model_id:
             body["model"] = {"providerID": provider_id, "modelID": model_id}
+        if variant:
+            body["variant"] = variant
         return await self._post(f"/session/{session_id}/prompt_async", body, directory=directory)
 
     # ------------------------------------------------------------------ #
@@ -290,6 +293,22 @@ class OpenCodeClient:
             for mid, model in provider.get("models", {}).items():
                 models.append({**model, "providerID": pid, "id": mid})
         return models
+
+    async def get_model_variants(self, provider_id: str, model_id: str) -> list[str]:
+        """
+        Return the available reasoning-effort variant names for a model
+        (e.g. ["low", "medium", "high", "max"]), or [] if it has none.
+        """
+        try:
+            data = await self._get("/provider")
+            for provider in data.get("all", []):
+                if provider.get("id") == provider_id:
+                    model = provider.get("models", {}).get(model_id, {})
+                    variants = model.get("variants") or {}
+                    return list(variants.keys())
+        except Exception:
+            pass
+        return []
 
     async def get_model_context_limit(self, provider_id: str, model_id: str) -> int | None:
         """Return context window size (tokens) for a given model, or None if unknown."""

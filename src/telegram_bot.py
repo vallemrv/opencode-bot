@@ -642,8 +642,10 @@ async def _drain_queue(app: Application, session_id: str):
         pending    = pending_models.pop(session_id, None)
         provider_id = pending["providerID"] if pending else None
         model_id    = pending["modelID"]    if pending else None
+        variant     = app.bot_data.get("session_variant", {}).get(session_id)
         await oc.send_message_async(session_id, text, directory=directory,
-                                    provider_id=provider_id, model_id=model_id)
+                                    provider_id=provider_id, model_id=model_id,
+                                    variant=variant)
         remaining = len(q) if q else 0
         if remaining:
             await app.bot.send_message(
@@ -1588,6 +1590,8 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if pid and mid:
             pending = ctx.bot_data.setdefault("pending_model", {})
             pending[sid] = {"providerID": pid, "modelID": mid}
+        # El nuevo modelo puede no soportar el variant anterior.
+        ctx.bot_data.get("session_variant", {}).pop(sid, None)
         await q.edit_message_text(
             f"✅ Modelo `{model_str or 'default'}` aplicado al próximo prompt.",
             parse_mode="Markdown",
@@ -2399,6 +2403,8 @@ async def cb_setmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if pid and mid:
         pending = ctx.bot_data.setdefault("pending_model", {})
         pending[sid] = {"providerID": pid, "modelID": mid}
+    # El nuevo modelo puede no soportar el variant anterior.
+    ctx.bot_data.get("session_variant", {}).pop(sid, None)
 
     cwd_name    = Path(directory).name if directory else "?"
     model_label = f"{pid}/{mid}" if pid and mid else "default del proveedor"
@@ -2407,6 +2413,114 @@ async def cb_setmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"📂 `{cwd_name}` · `{title}`",
         parse_mode="Markdown",
     )
+
+
+# ---------------------------------------------------------------------------
+# /effort — choose reasoning effort (variant) for the active session
+# ---------------------------------------------------------------------------
+
+# Orden lógico de mayor a menor para mostrar los botones de esfuerzo.
+_EFFORT_ORDER = ["max", "high", "medium", "low", "none"]
+_EFFORT_LABEL = {
+    "max":    "🔴 Max",
+    "high":   "🟠 Alto",
+    "medium": "🟡 Medio",
+    "low":    "🟢 Bajo",
+    "none":   "⚪ Ninguno",
+}
+
+
+@admin_only
+async def cmd_effort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Fija el esfuerzo de razonamiento (variant) de la sesión activa."""
+    active = await db.get_active()
+    if not active:
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
+        return
+
+    sid       = active["session_id"]
+    directory = active["directory"]
+
+    if not await _server_ok(update.message.reply_text):
+        return
+
+    # El modelo efectivo: override pendiente (/models) o el de la sesión.
+    pending = ctx.bot_data.get("pending_model", {}).get(sid)
+    if pending:
+        pid, mid = pending["providerID"], pending["modelID"]
+    else:
+        try:
+            sess_info = await oc.get_session(sid, directory=directory or None)
+            model_obj = sess_info.get("model", {}) or {}
+            pid = model_obj.get("providerID", "")
+            mid = model_obj.get("id", "")
+        except Exception as exc:
+            await update.message.reply_text(f"❌ No pude leer la sesión: {exc}")
+            return
+
+    if not (pid and mid):
+        await update.message.reply_text(
+            "⚠️ La sesión no tiene un modelo asignado todavía. Usa /models o envía un prompt primero."
+        )
+        return
+
+    try:
+        variants = await oc.get_model_variants(pid, mid)
+    except Exception as exc:
+        await update.message.reply_text(f"❌ Error al consultar el modelo: {exc}")
+        return
+
+    if not variants:
+        await update.message.reply_text(
+            f"ℹ️ El modelo `{mid}` no permite elegir esfuerzo de razonamiento.",
+            parse_mode="Markdown",
+        )
+        return
+
+    current = ctx.bot_data.get("session_variant", {}).get(sid)
+    ordered = [v for v in _EFFORT_ORDER if v in variants] + \
+              [v for v in variants if v not in _EFFORT_ORDER]
+
+    btns = []
+    for v in ordered:
+        label = _EFFORT_LABEL.get(v, v)
+        if v == current:
+            label = f"✅ {label}"
+        btns.append([InlineKeyboardButton(label, callback_data=f"effort:{v}")])
+    btns.append([InlineKeyboardButton("↩ Por defecto", callback_data="effort:__default__")])
+    btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
+
+    cur_label = _EFFORT_LABEL.get(current, current) if current else "por defecto"
+    await update.message.reply_text(
+        f"🧠 *Esfuerzo de razonamiento*\n"
+        f"🧩 `{mid}`\nActual: *{cur_label}*\n\nElige el nivel:",
+        reply_markup=InlineKeyboardMarkup(btns),
+        parse_mode="Markdown",
+    )
+
+
+async def cb_effort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Guarda el esfuerzo elegido para la sesión activa (persiste entre prompts)."""
+    q = update.callback_query; await q.answer()
+    variant = q.data.split(":", 1)[1]
+
+    active = await db.get_active()
+    if not active:
+        await q.edit_message_text("⚠️ No hay sesión activa. Usa /open primero.")
+        return
+    sid = active["session_id"]
+
+    store = ctx.bot_data.setdefault("session_variant", {})
+    if variant == "__default__":
+        store.pop(sid, None)
+        await q.edit_message_text("↩ Esfuerzo restablecido al valor por defecto del modelo.")
+    else:
+        store[sid] = variant
+        label = _EFFORT_LABEL.get(variant, variant)
+        await q.edit_message_text(
+            f"✅ Esfuerzo de razonamiento: *{label}*\n_Se aplicará a los próximos prompts._",
+            parse_mode="Markdown",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2758,6 +2872,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     pending = pending_models.pop(sid, None)
     provider_id = pending["providerID"] if pending else None
     model_id    = pending["modelID"]    if pending else None
+    variant     = ctx.bot_data.get("session_variant", {}).get(sid)
 
     send_mode = ctx.bot_data.get("send_target")
     
@@ -2793,7 +2908,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     try:
         await oc.send_message_async(sid, text, directory=directory,
-                                    provider_id=provider_id, model_id=model_id)
+                                    provider_id=provider_id, model_id=model_id,
+                                    variant=variant)
     except Exception as exc:
         # Clean up the status message if send failed
         await _delete_msg(ctx.bot, ADMIN_ID, sent.message_id)
@@ -3065,6 +3181,7 @@ async def _do_send_text(app: Application, text: str, sid: str, directory: str, c
     pending = pending_models.pop(sid, None)
     provider_id = pending["providerID"] if pending else None
     model_id    = pending["modelID"]    if pending else None
+    variant     = app.bot_data.get("session_variant", {}).get(sid)
 
     sent = await app.bot.send_message(
         chat_id,
@@ -3082,7 +3199,8 @@ async def _do_send_text(app: Application, text: str, sid: str, directory: str, c
 
     try:
         await oc.send_message_async(sid, text, directory=directory,
-                                    provider_id=provider_id, model_id=model_id)
+                                    provider_id=provider_id, model_id=model_id,
+                                    variant=variant)
     except Exception as exc:
         statuses = app.bot_data.get("statuses", {})
         statuses.pop(sid, None)
@@ -3288,6 +3406,7 @@ def main():
     app.add_handler(CommandHandler("close",    cmd_close))
     app.add_handler(CommandHandler("sessions", cmd_sessions))
     app.add_handler(CommandHandler("models",   cmd_models))
+    app.add_handler(CommandHandler("effort",   cmd_effort))
     app.add_handler(CommandHandler("esc",      cmd_esc))
     app.add_handler(CommandHandler("send",     cmd_send))
     app.add_handler(CommandHandler("endsend",  cmd_endsend))
@@ -3324,6 +3443,7 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_sesspick,  pattern=r"^sesspick:"))
     app.add_handler(CallbackQueryHandler(cb_modprov,   pattern=r"^modprov:"))
     app.add_handler(CallbackQueryHandler(cb_setmodel,  pattern=r"^setmodel:"))
+    app.add_handler(CallbackQueryHandler(cb_effort,    pattern=r"^effort:"))
 
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, handle_file_upload))
     app.add_handler(MessageHandler(filters.AUDIO | filters.VOICE, handle_audio_upload))
@@ -3367,6 +3487,7 @@ def main():
             BotCommand("endsend",  "Salir del modo send persistente"),
             BotCommand("close",    "Cerrar proyecto"),
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),
+            BotCommand("effort",   "Esfuerzo de razonamiento de la sesión activa"),
             BotCommand("restart",  "Reiniciar el bot"),
             BotCommand("esc",      "Cancelar tarea actual"),
         ])
