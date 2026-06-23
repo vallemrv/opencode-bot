@@ -1376,7 +1376,7 @@ class _MsgEditShim:
 
 
 # Carpeta de trabajo temporal para /tmp: vive en /tmp, el SO la borra al reiniciar.
-TMP_SESSION_DIR = "/tmp/opencode-telegram"
+TMP_SESSION_DIR = "/tmp/opencode-tmp"
 
 
 @admin_only
@@ -3481,7 +3481,7 @@ def main():
         await application.bot.set_my_commands([
             BotCommand("start",    "Estado y menú"),
             BotCommand("open",     "Abrir proyecto / sesión"),
-            BotCommand("tmp",      "Abrir sesión en /tmp/opencode-telegram"),
+            BotCommand("tmp",      "Abrir sesión en /tmp/opencode-tmp"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("send",     "Enviar prompt a proyecto (modo persistente)"),
             BotCommand("endsend",  "Salir del modo send persistente"),
