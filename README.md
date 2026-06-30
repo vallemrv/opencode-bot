@@ -25,9 +25,12 @@ Bot de Telegram para controlar el servidor OpenCode remotamente.
 | `/close` | Cerrar proyecto y borrar sesiones |
 | `/sessions` | Gestiona sesiones del proyecto activo |
 | `/models` | Cambiar modelo de la sesión activa |
-| `/projects` | Lista proyectos con sesiones |
 | `/send` | Enviar prompt a otro proyecto |
+| `/endsend` | Salir del modo send persistente |
 | `/esc` | Cancelar tarea en curso |
+| `/tmp` | Crear/activar un workspace temporal |
+| `/effort` | Elegir el esfuerzo de razonamiento del modelo |
+| `/restart` | Actualizar (git pull) y reiniciar el bot |
 
 ## Conversaciones múltiples
 

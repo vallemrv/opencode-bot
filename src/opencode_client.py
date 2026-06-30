@@ -113,14 +113,6 @@ class OpenCodeClient:
         """List all projects OpenCode knows about."""
         return await self._get("/project")
 
-    async def get_project(self, directory: str) -> dict | None:
-        """Find a project by its worktree directory."""
-        projects = await self.list_projects()
-        for p in projects:
-            if p.get("worktree") == directory:
-                return p
-        return None
-
     # ------------------------------------------------------------------ #
     #  Sessions                                                            #
     # ------------------------------------------------------------------ #
@@ -220,9 +212,6 @@ class OpenCodeClient:
     async def delete_session(self, session_id: str, directory: str | None = None) -> Any:
         return await self._delete(f"/session/{session_id}", directory=directory)
 
-    async def update_session(self, session_id: str, directory: str | None = None, **kwargs) -> dict:
-        return await self._patch(f"/session/{session_id}", kwargs, directory=directory)
-
     async def abort_session(self, session_id: str, directory: str | None = None) -> Any:
         return await self._post(f"/session/{session_id}/abort", {}, directory=directory)
 
@@ -240,10 +229,6 @@ class OpenCodeClient:
     # ------------------------------------------------------------------ #
     #  Question tool                                                       #
     # ------------------------------------------------------------------ #
-
-    async def list_questions(self, directory: str | None = None) -> list[dict]:
-        """List all pending question requests."""
-        return await self._get("/question", directory=directory)
 
     async def reply_question(self, request_id: str, answers: list[list[str]], directory: str | None = None) -> Any:
         """Reply to a question request. answers is a list per question, each a list of selected labels."""

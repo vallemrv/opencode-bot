@@ -210,7 +210,6 @@ def _build_status_text(st: dict) -> str:
     state      = st.get("state", "busy")
     tool       = st.get("tool")
     files      = st.get("files_edited", set())
-    msgs       = st.get("message_count", 0)
     tools_seen = st.get("tools_seen", [])
     directory  = st.get("directory", "")
     cwd_name   = Path(directory).name or "?"
@@ -717,7 +716,6 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
         header   = q.get("header", f"Pregunta {q_idx+1}")
         question = q.get("question", "")
         options  = q.get("options", [])
-        multiple = q.get("multiple", False)
         custom   = q.get("custom", True)
 
         # Build option buttons (one per row)
@@ -736,7 +734,6 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
 
         # Custom answer row
         if custom:
-            ck = _key_raw(app.bot_data, f"{req_id}|{q_idx}|custom")
             btns.append([InlineKeyboardButton(
                 "✏️ Escribe tu propia respuesta",
                 callback_data=f"qcustom:{rk}:{sk}:{q_idx}",
@@ -834,13 +831,11 @@ async def _refresh_question_buttons(app: Application, req_id: str) -> None:
             )])
 
         if custom:
-            ck = _key_raw(app.bot_data, f"{req_id}|{q_idx}|custom")
             btns.append([InlineKeyboardButton(
                 "✏️ Escribe tu propia respuesta",
                 callback_data=f"qcustom:{rk}:{sk}:{q_idx}",
             )])
 
-        remaining = n - answered_count
         if n > 1:
             btns.append([InlineKeyboardButton(
                 f"📨 Enviar ahora ({answered_count}/{n})",
@@ -1244,13 +1239,6 @@ async def sse_listener(app: Application) -> None:
         except Exception as exc:
             logger.error(f"SSE handler error [{etype}]: {exc}", exc_info=True)
 
-def _is_bot_dir(directory: str) -> bool:
-    """Return True if the directory is the bot's own project directory."""
-    try:
-        return Path(directory).resolve() == Path(BOT_DIR).resolve()
-    except Exception:
-        return False
-
 
 # ---------------------------------------------------------------------------
 # Folder browser
@@ -1319,7 +1307,8 @@ async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cb_ob(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     _, pk, pg = q.data.split(":")
     path = Path(_val(ctx, int(pk)))
     if path.is_file():
@@ -1330,7 +1319,8 @@ async def cb_ob(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_mkdir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """User pressed 'Nueva carpeta' — ask for the folder name."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     pk   = int(q.data.split(":")[1])
     path = _val(ctx, pk)
     ctx.bot_data["mkdir_pending"] = {"path": path, "msg_id": q.message.message_id}
@@ -1342,10 +1332,10 @@ async def cb_mkdir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_os(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Folder selected → check if project has sessions → session picker or model picker."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     cwd      = _val(ctx, int(q.data.split(":")[1]))
     cwd_path = Path(cwd)
-    pk       = _key(ctx, cwd)
 
     await q.edit_message_text(f"📂 `{cwd_path.name}`\n⏳ Consultando OpenCode...", parse_mode="Markdown")
 
@@ -1509,7 +1499,8 @@ async def _show_provider_picker(q, ctx, cwd: str | None, skip_loading: bool = Fa
 
 async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Shared provider→model list. Works for both /open wizard and /models."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     pk    = int(parts[1])
     pid_k = int(parts[2])
@@ -1541,7 +1532,8 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         mk = _key(ctx, f"{pid}|{mid}")
         row.append(InlineKeyboardButton(mid, callback_data=f"provmodel:{pk}:{mk}"))
         if len(row) == 2:
-            btns.append(row); row = []
+            btns.append(row)
+            row = []
     if row:
         btns.append(row)
 
@@ -1557,7 +1549,7 @@ async def cb_prov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if cwd:
         btns.append([InlineKeyboardButton("⬅ Proveedores", callback_data=f"os:{pk}")])
     else:
-        btns.append([InlineKeyboardButton("⬅ Proveedores", callback_data=f"prov:-1:0:0")])
+        btns.append([InlineKeyboardButton("⬅ Proveedores", callback_data="prov:-1:0:0")])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await q.edit_message_text(
@@ -1573,7 +1565,8 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     pk == -1 → /models mode: update model of active session.
     pk != -1 → wizard mode: create new session in cwd.
     """
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts     = q.data.split(":")
     pk        = int(parts[1])
     model_str = _val(ctx, int(parts[2]))
@@ -1586,7 +1579,6 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("⚠️ No hay sesión activa. Usa /open primero.")
             return
         sid       = active["session_id"]
-        directory = active["directory"]
         if pid and mid:
             pending = ctx.bot_data.setdefault("pending_model", {})
             pending[sid] = {"providerID": pid, "modelID": mid}
@@ -1647,7 +1639,8 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_newsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Nueva sesión para proyecto que ya tiene sesiones."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     pk  = int(q.data.split(":")[1])
     cwd = _val(ctx, pk)
     await _show_provider_picker(q, ctx, cwd)
@@ -1655,7 +1648,8 @@ async def cb_newsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_actsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Activate an existing session."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     pk    = int(parts[2]) if len(parts) > 2 else None
@@ -1693,7 +1687,8 @@ async def cb_actsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Delete a session — if it has children, ask for confirmation first."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     pk    = int(parts[2]) if len(parts) > 2 else None
@@ -1721,7 +1716,8 @@ async def cb_delsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_delconfirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Confirmed deletion of a session with children."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     pk    = int(parts[2]) if len(parts) > 2 else None
@@ -1766,7 +1762,8 @@ async def _do_delete_session(q, ctx, sid: str, cwd: str, pk):
 
 
 async def cb_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     await q.edit_message_text("❌ Cancelado.")
 
 
@@ -1798,7 +1795,8 @@ async def _send_question_answer(app: Application, req_id: str, session_id: str, 
 
 async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Option button pressed for a question."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts  = q.data.split(":")
     rk     = int(parts[1])
     sk     = int(parts[2])
@@ -1835,7 +1833,8 @@ async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """User wants to send with only the answered questions, ignoring the rest."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts      = q.data.split(":")
     req_id     = _val(ctx, int(parts[1]))
     session_id = _val(ctx, int(parts[2]))
@@ -1855,7 +1854,8 @@ async def cb_qsendnow(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_qcustom(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """User wants to type a custom answer for a question."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts  = q.data.split(":")
     rk     = int(parts[1])
     sk     = int(parts[2])
@@ -1885,9 +1885,9 @@ async def cb_qcustom(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """User cancels/rejects a question."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts  = q.data.split(":")
-    rk     = int(parts[1])
     req_id = _val(ctx, int(parts[1]))
 
     q_data    = ctx.bot_data.get("pending_questions", {}).get(req_id, {})
@@ -1918,7 +1918,8 @@ async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_perm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Handle permission allow/deny responses."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts     = q.data.split(":")
     # perm:sk:pk:dk:response  (pk=perm_id_key, dk=dir_key)
     sk        = int(parts[1])
@@ -1952,7 +1953,8 @@ async def cb_perm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_perminput(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Ask user to type a custom permission response."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts   = q.data.split(":")
     sk      = int(parts[1])
     perm_k  = int(parts[2])
@@ -1974,7 +1976,8 @@ async def cb_perminput(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_permabort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Abort session when permission is pending."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts     = q.data.split(":")
     sk        = int(parts[1])
     dk        = int(parts[2])
@@ -2039,7 +2042,8 @@ async def cmd_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_closedir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Project selected in /close → ask what to do."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     ck        = int(q.data.split(":")[1])
     directory = _val(ctx, ck)
     name      = Path(directory).name
@@ -2058,7 +2062,8 @@ async def cb_closedir(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_closedel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Delete all sessions of a project from OpenCode."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     ck        = int(q.data.split(":")[1])
     directory = _val(ctx, ck)
 
@@ -2090,7 +2095,8 @@ async def cb_closedel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_closebot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Only clear active session in bot, keep OpenCode sessions intact."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     ck        = int(q.data.split(":")[1])
     directory = _val(ctx, ck)
 
@@ -2106,7 +2112,8 @@ async def cb_closebot(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_closeall(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Delete ALL sessions from the OpenCode server and clear active session."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
 
     await q.edit_message_text("⏳ Borrando todas las sesiones del server...")
 
@@ -2191,7 +2198,8 @@ async def cmd_sessions(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_sesspick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Project chosen in /sessions → show its session picker."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     dk        = int(q.data.split(":")[1])
     directory = _val(ctx, dk)
 
@@ -2232,7 +2240,8 @@ async def cb_sesspick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_sda(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Delete all sessions for a project."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     pk        = int(q.data.split(":")[1])
     directory = _val(ctx, pk)
 
@@ -2332,12 +2341,12 @@ async def cmd_models(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Provider chosen in /models → show model list."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sk    = int(parts[1])
     pid_k = int(parts[2])
     page  = int(parts[3]) if len(parts) > 3 else 0
-    sid   = _val(ctx, sk)
     pid   = _val(ctx, pid_k)
 
     try:
@@ -2364,7 +2373,8 @@ async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         mk = _key(ctx, f"{pid}|{mid}")
         row.append(InlineKeyboardButton(mid, callback_data=f"setmodel:{sk}:{mk}"))
         if len(row) == 2:
-            btns.append(row); row = []
+            btns.append(row)
+            row = []
     if row:
         btns.append(row)
     nav = []
@@ -2385,7 +2395,8 @@ async def cb_modprov(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_setmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Model chosen in /models → apply to the target session."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts     = q.data.split(":")
     sid       = _val(ctx, int(parts[1]))
     model_str = _val(ctx, int(parts[2]))
@@ -2501,7 +2512,8 @@ async def cmd_effort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_effort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Guarda el esfuerzo elegido para la sesión activa (persiste entre prompts)."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     variant = q.data.split(":", 1)[1]
 
     active = await db.get_active()
@@ -2548,7 +2560,8 @@ async def cmd_esc(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     active = await db.get_active()
     if not active:
         await q.edit_message_text("⚠️ No hay sesión activa. Usa /open primero.")
@@ -2724,7 +2737,6 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Error al crear carpeta: {exc}")
             return
         # Navigate into the new folder
-        pk  = _key(ctx, str(new_dir))
         txt, kbd = _folder_kbd(ctx, new_dir, 0)
         await ctx.bot.edit_message_text(
             chat_id=ADMIN_ID, message_id=mkdir_pending["msg_id"],
@@ -2944,48 +2956,6 @@ async def cmd_restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await svc_proc.wait()
 
 
-@admin_only
-async def cmd_projects(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    try:
-        projects     = await oc.list_projects()
-        all_sessions = await oc.list_sessions()
-    except Exception as exc:
-        await update.message.reply_text(f"❌ Error: {exc}")
-        return
-
-    by_dir: dict[str, list] = defaultdict(list)
-    for s in all_sessions:
-        d = s.get("_worktree") or s.get("directory", "")
-        if d:
-            by_dir[d].append(s)
-
-    if not by_dir:
-        await update.message.reply_text("No hay proyectos con sesiones. Usa /open primero.")
-        return
-
-
-    proj_by_wt = {p.get("worktree", ""): p for p in projects}
-    active     = await db.get_active()
-    active_dir = (active or {}).get("directory", "")
-    active_sid = (active or {}).get("session_id", "")
-
-    lines = ["*Proyectos abiertos*\n"]
-    for directory in sorted(by_dir.keys()):
-        sessions   = by_dir[directory]
-        p          = proj_by_wt.get(directory)
-        name       = (p or {}).get("name") or Path(directory).name
-        is_active  = directory == active_dir
-        cur_sess   = next((s for s in sessions if s.get("id") == active_sid), sessions[0])
-        sess_title = cur_sess.get("title") or cur_sess.get("id", "")[:12]
-        marker     = " ◀ activo" if is_active else ""
-
-        lines.append(
-            f"📂 *{name}*{marker}\n"
-            f"   📦 `{sess_title}`\n"
-            f"   {len(sessions)} sesión{'es' if len(sessions) != 1 else ''}"
-        )
-
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -3105,7 +3075,8 @@ async def _show_send_session_picker(q, ctx, directory: str, sessions: list[dict]
 
 async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Project selected for /send → show its sessions to pick one."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     dk        = int(q.data.split(":")[1])
     directory = _val(ctx, dk)
 
@@ -3120,7 +3091,8 @@ async def cb_sendpick(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_sendsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Session selected for /send → send pending text or ask for text."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     dk    = int(parts[2])
@@ -3210,7 +3182,8 @@ async def _do_send_text(app: Application, text: str, sid: str, directory: str, c
 
 async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Nueva sesión desde el picker de /send → muestra selector de proveedor/modelo."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     dk        = int(q.data.split(":")[1])
     directory = _val(ctx, dk)
 
@@ -3222,7 +3195,8 @@ async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_senddelsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Delete a session from the /send session picker, then refresh the picker."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     dk    = int(parts[2])
@@ -3250,7 +3224,8 @@ async def cb_senddelsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_senddelconfirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Confirmed deletion of session with children from /send picker."""
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     parts = q.data.split(":")
     sid   = _val(ctx, int(parts[1]))
     dk    = int(parts[2])
@@ -3343,7 +3318,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         session_title = sid[:12]
         model_label   = "default"
-        state_icon    = "⚪"
         try:
             sess_info   = await oc.get_session(sid, directory=directory)
             session_title = sess_info.get("title") or sid[:12]

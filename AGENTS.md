@@ -70,10 +70,12 @@ El bot **no gestiona** el proceso de OpenCode, solo se conecta a él vía HTTP y
 | `/close` | Cierra proyecto: borra sesiones de OpenCode y limpia sesión activa |
 | `/sessions` | Gestiona sesiones del proyecto activo |
 | `/models` | Cambia el modelo de la sesión activa |
-| `/projects` | Lista todos los proyectos con sesiones en OpenCode |
 | `/send` | Entra en modo persistente: todos los mensajes se envían al proyecto/sesión seleccionado |
 | `/endsend` | Sale del modo send persistente |
 | `/esc` | Cancela la tarea en curso (abort) |
+| `/tmp` | Crea/activa un workspace temporal (`/tmp/opencode-tmp`) como proyecto OpenCode |
+| `/effort` | Elige la variante de esfuerzo de razonamiento del modelo (low/medium/high/max) para la sesión |
+| `/restart` | `git pull` + `systemctl restart` del propio bot |
 
 Cualquier texto libre (o audio) envía un prompt a la sesión activa. Los replies a mensajes del bot se envían a la sesión que generó ese mensaje.
 
@@ -151,6 +153,7 @@ Texto
 | `permission.replied` | Limpia diálogo de permiso |
 | `question.asked` | Muestra preguntas inline del LLM |
 | `question.replied` | Limpia preguntas inline |
+| `question.rejected` | Limpia preguntas inline (rechazadas; mismo manejo que `question.replied`) |
 
 ## Estado en `bot_data["statuses"]`
 
@@ -161,7 +164,8 @@ Texto
     "directory": str,        # Directorio del proyecto
     "model": str,            # Modelo actual
     "session_title": str,    # Título de la sesión
-    "state": str,            # busy | thinking | idle | error
+    "state": str,            # pending | busy | thinking | idle | error
+    "pending": bool,         # True mientras se espera el primer evento SSE
     "tool": str | None,      # herramienta actual
     "tools_seen": [str],     # todas las herramientas llamadas
     "files_edited": set(),   # ficheros modificados
@@ -173,6 +177,9 @@ Texto
     "last_update_time": float, # última actualización del mensaje
     "tokens_input": int,     # tokens input
     "tokens_output": int,    # tokens output
+    "msg_costs": dict,       # message_id -> coste (USD) reportado por OpenCode
+    "ctx_tokens": int,       # tokens de contexto en uso (para el % de ctx en vivo)
+    "ctx_limit": int,        # límite de contexto del modelo
   }
 }
 ```
@@ -184,6 +191,7 @@ Texto
 - `bot_data["msg_to_session"]` — Mapea message_id → {session_id, directory}
 - `bot_data["queues"]` — Cola de prompts pendientes por sesión
 - `bot_data["pending_model"]` — Modelo pendiente para próximo prompt
+- `bot_data["session_variant"]` — Variante de esfuerzo por sesión elegida con `/effort`
 - `bot_data["pending_perms"]` — Permisos pendientes de respuesta
 - `bot_data["pending_questions"]` — Preguntas del LLM pendientes
 - `bot_data["send_target"]` — Destino para /send
@@ -219,8 +227,9 @@ Texto
 | `sendpick:` | `cb_sendpick` | Elegir proyecto para /send |
 | `sendsess:` | `cb_sendsess` | Elegir sesión para /send |
 | `sendnewsess:` | `cb_sendnewsess` | Nueva sesión para /send |
+| `senddelsess:` | `cb_senddelsess` | Borrar sesión desde el picker de /send |
+| `senddelconfirm:` | `cb_senddelconfirm` | Confirmar borrado de sesión en /send |
 | `sesspick:` | `cb_sesspick` | Elegir sesión en /sessions |
-| `modpick:` | `cb_modpick` | Elegir sesión en /models |
-| `modsess:` | `cb_modsess` | Sesión elegida en /models |
+| `effort:` | `cb_effort` | Elegir variante de esfuerzo en /effort |
 | `modprov:` | `cb_modprov` | Proveedor elegido en /models |
 | `setmodel:` | `cb_setmodel` | Establecer modelo |

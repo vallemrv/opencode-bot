@@ -30,7 +30,7 @@ No hay tests. Cambios se commitean directo a `main` y se pushean (rama única, v
 
 Cinco módulos en `src/`:
 
-- **`telegram_bot.py`** (~3200 líneas) — Único entrypoint. `main()` registra todos los handlers y arranca `app.run_polling()`. Contiene todos los comandos, callbacks inline, el procesamiento de eventos SSE y el renderizado de estado en vivo.
+- **`telegram_bot.py`** (~3500 líneas) — Único entrypoint. `main()` registra todos los handlers y arranca `app.run_polling()`. Contiene todos los comandos, callbacks inline, el procesamiento de eventos SSE y el renderizado de estado en vivo.
 - **`opencode_client.py`** — Cliente async de la API de OpenCode. Una `aiohttp.ClientSession` reutilizada para HTTP; el SSE usa su propia sesión efímera con reconexión y backoff exponencial.
 - **`db.py`** — SQLite mínimo (`bot.db`). **Solo** una tabla `active_session` (singleton, `id=1`) con `session_id` + `directory`. Nada más se persiste.
 - **`transcription.py`** — STT de notas de voz vía API de X.AI (Grok). Devuelve `None` si `XAI_API_KEY` no está configurada.
