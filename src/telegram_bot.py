@@ -3495,14 +3495,13 @@ def main():
         if RESTART_FLAG.exists():
             try:
                 old_msg_id = int(RESTART_FLAG.read_text().strip())
-                RESTART_FLAG.unlink(missing_ok=True)
-                
+
                 active = await db.get_active()
                 if active:
                     sid       = active["session_id"]
                     directory = active["directory"]
                     cwd_name  = Path(directory).name
-                    
+
                     session_title = sid[:12]
                     model_label   = "default"
                     try:
@@ -3513,23 +3512,31 @@ def main():
                             model_label = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
                     except Exception:
                         pass
-                    
-                    await application.bot.edit_message_text(
-                        chat_id=ADMIN_ID,
-                        message_id=old_msg_id,
-                        text=f"✅ *Bot reiniciado*\n\n"
-                             f"📂 `{cwd_name}`\n"
-                             f"📦 `{session_title}`\n"
-                             f"🧩 `{model_label}`",
-                        parse_mode="Markdown",
+
+                    notif_text = (
+                        f"✅ *Bot reiniciado*\n\n"
+                        f"📂 `{cwd_name}`\n"
+                        f"📦 `{session_title}`\n"
+                        f"🧩 `{model_label}`"
                     )
                 else:
+                    notif_text = "✅ *Bot reiniciado*\n\n⚠️ Sin sesión activa"
+
+                try:
                     await application.bot.edit_message_text(
                         chat_id=ADMIN_ID,
                         message_id=old_msg_id,
-                        text="✅ *Bot reiniciado*\n\n⚠️ Sin sesión activa",
+                        text=notif_text,
                         parse_mode="Markdown",
                     )
+                except Exception:
+                    await application.bot.send_message(
+                        chat_id=ADMIN_ID,
+                        text=notif_text,
+                        parse_mode="Markdown",
+                    )
+
+                RESTART_FLAG.unlink(missing_ok=True)
             except Exception as e:
                 logger.warning(f"Could not send restart notification: {e}")
                 RESTART_FLAG.unlink(missing_ok=True)
