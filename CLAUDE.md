@@ -51,7 +51,7 @@ Cinco módulos en `src/`:
 **`BOT_DIR` excluido de listados.** El directorio raíz del bot (`Path(__file__).parent.parent`) está en `BOT_DIR` y se filtra explícitamente en `/sessions` y `/close` para que no aparezca como proyecto OpenCode.
 
 **Dos directorios temporales distintos:**
-- `TMP_SESSION_DIR = "/tmp/opencode-tmp"` — workspace que crea el comando `/tmp`; es un directorio de proyecto real en OpenCode.
+- `TMP_SESSION_DIR = ~/.local/share/opencode-bot/tmp` — workspace que crea el comando `/tmp`; es un directorio de proyecto real en OpenCode. **Ruta persistente a propósito**: cuando vivía en `/tmp` (se vacía en cada reboot), OpenCode podía bootstrapear su file picker para una carpeta inexistente y dejar la instancia de ese directorio rota en memoria (`"Invalid path"`), abortando todos los prompts a ~3ms. No volver a moverlo a `/tmp`.
 - `TMP_DIR = Path("/tmp/opencode-bot-media")` — solo para descargas temporales de audio antes de moverlas al cwd del proyecto.
 
 ### Estado en memoria (`bot_data`)

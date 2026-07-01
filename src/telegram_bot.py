@@ -1365,8 +1365,12 @@ class _MsgEditShim:
         )
 
 
-# Carpeta de trabajo temporal para /tmp: vive en /tmp, el SO la borra al reiniciar.
-TMP_SESSION_DIR = "/tmp/opencode-tmp"
+# Carpeta de trabajo del comando /tmp. Ruta PERSISTENTE bajo $HOME a propósito:
+# antes vivía en /tmp, pero /tmp se vacía en cada reboot y entonces OpenCode podía
+# bootstrapear su file picker (fff) para una carpeta inexistente, dejando la instancia
+# de ese directorio rota en memoria ("Invalid path") y abortando TODOS los prompts a
+# ~3ms. Una ruta que no se borra evita ese race.
+TMP_SESSION_DIR = str(Path.home() / ".local" / "share" / "opencode-bot" / "tmp")
 
 
 @admin_only
@@ -3455,7 +3459,7 @@ def main():
         await application.bot.set_my_commands([
             BotCommand("start",    "Estado y menú"),
             BotCommand("open",     "Abrir proyecto / sesión"),
-            BotCommand("tmp",      "Abrir sesión en /tmp/opencode-tmp"),
+            BotCommand("tmp",      "Abrir sesión de trabajo temporal"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("send",     "Enviar prompt a proyecto (modo persistente)"),
             BotCommand("endsend",  "Salir del modo send persistente"),

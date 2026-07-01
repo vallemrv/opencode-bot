@@ -73,7 +73,7 @@ El bot **no gestiona** el proceso de OpenCode, solo se conecta a él vía HTTP y
 | `/send` | Entra en modo persistente: todos los mensajes se envían al proyecto/sesión seleccionado |
 | `/endsend` | Sale del modo send persistente |
 | `/esc` | Cancela la tarea en curso (abort) |
-| `/tmp` | Crea/activa un workspace temporal (`/tmp/opencode-tmp`) como proyecto OpenCode |
+| `/tmp` | Crea/activa un workspace temporal (`~/.local/share/opencode-bot/tmp`) como proyecto OpenCode |
 | `/effort` | Elige la variante de esfuerzo de razonamiento del modelo (low/medium/high/max) para la sesión |
 | `/restart` | `git pull` + `systemctl restart` del propio bot |
 
