@@ -70,8 +70,8 @@ El bot **no gestiona** el proceso de OpenCode, solo se conecta a él vía HTTP y
 | `/close` | Cierra proyecto: borra sesiones de OpenCode y limpia sesión activa |
 | `/sessions` | Gestiona sesiones del proyecto activo |
 | `/models` | Cambia el modelo de la sesión activa |
-| `/send` | Entra en modo persistente: todos los mensajes se envían al proyecto/sesión seleccionado |
-| `/endsend` | Sale del modo send persistente |
+| `/send` | Envía un mensaje one-shot a un proyecto/sesión (elige proyecto → sesión → escribe) |
+| `/endsend` | Cancela el envío pendiente de /send |
 | `/esc` | Cancela la tarea en curso (abort) |
 | `/tmp` | Crea/activa un workspace temporal (`~/.local/share/opencode-bot/tmp`) como proyecto OpenCode |
 | `/effort` | Elige la variante de esfuerzo de razonamiento del modelo (low/medium/high/max) para la sesión |
@@ -105,27 +105,14 @@ Cualquier texto libre (o audio) envía un prompt a la sesión activa. Los replie
        └─ "Cerrar todo del server" → elimina TODAS las sesiones de TODOS los proyectos
 ```
 
-### /send (modo wizard por mensaje)
+### /send (one-shot)
 
 ```
 /send
-  └─ Activa modo send
-       └─ "Cada mensaje requerirá elegir destino"
-       
-Mensaje: "haz commit"
-  └─ Wizard: elige proyecto → elige sesión → envía
-
-Mensaje: "otra cosa"
-  └─ Wizard: elige proyecto → elige sesión → envía
-
-/endsend
-  └─ Desactiva modo send
+  └─ Elige proyecto → elige sesión → "Escribe el mensaje" → envía → fin
 ```
 
-También funciona sin modo:
-```
-/send → wizard → elige → "Escribe el mensaje" → envía
-```
+`/endsend` cancela el envío pendiente si no se ha enviado el mensaje todavía.
 
 ### Texto libre → prompt
 

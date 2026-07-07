@@ -485,8 +485,6 @@ async def _finish_status(app: Application, session_id: str):
     sess_title = st.get("session_title", "") if st else ""
 
     header_parts = [f"✅ `{md2tgv2._escape(cwd_name)}`"]
-    if app.bot_data.get("send_target"):
-        header_parts.append("📤")
     if model_info:
         header_parts.append(model_info)
     if elapsed:
@@ -602,17 +600,26 @@ async def _drain_queue(app: Application, session_id: str):
     directory = item["directory"]
     cwd_name  = Path(directory).name or "?"
 
+    pending_models = app.bot_data.get("pending_model", {})
+    pending    = pending_models.pop(session_id, None)
+    provider_id = pending["providerID"] if pending else None
+    model_id    = pending["modelID"]    if pending else None
+    variant     = app.bot_data.get("session_variant", {}).get(session_id)
+
     try:
         sess_info = await oc.get_session(session_id, directory=directory)
         sess_title = sess_info.get("title") or session_id[:12]
-        model_obj = sess_info.get("model", {})
-        model_short = ""
-        if model_obj:
-            model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
-            model_short = model_full.split("/")[-1] if "/" in model_full else model_full
+        if pending:
+            model_short = model_id or ""
+        else:
+            model_obj = sess_info.get("model", {})
+            model_short = ""
+            if model_obj:
+                model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+                model_short = model_full.split("/")[-1] if "/" in model_full else model_full
     except Exception:
         sess_title = session_id[:12]
-        model_short = ""
+        model_short = model_id if pending else ""
 
     try:
         sent = await app.bot.send_message(
@@ -637,11 +644,6 @@ async def _drain_queue(app: Application, session_id: str):
     _track_msg(app, sent.message_id, session_id, directory)
 
     try:
-        pending_models = app.bot_data.get("pending_model", {})
-        pending    = pending_models.pop(session_id, None)
-        provider_id = pending["providerID"] if pending else None
-        model_id    = pending["modelID"]    if pending else None
-        variant     = app.bot_data.get("session_variant", {}).get(session_id)
         await oc.send_message_async(session_id, text, directory=directory,
                                     provider_id=provider_id, model_id=model_id,
                                     variant=variant)
@@ -1612,25 +1614,17 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         # If this session was created from the /send flow
         send_new_dir = ctx.bot_data.pop("send_new_sess_dir", None)
-        pending_text = ctx.bot_data.pop("send_mode_text", None)
         
         if send_new_dir and Path(send_new_dir).resolve() == Path(cwd).resolve():
-            if pending_text:
-                await q.edit_message_text(
-                    f"✅ Sesión creada\n📦 `{title}`\n📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n📤 Enviando...",
-                    parse_mode="Markdown",
-                )
-                await _do_send_text(ctx.application, pending_text, sid, cwd, q.message.chat_id)
-            else:
-                ctx.bot_data["send_target"] = {"session_id": sid, "directory": cwd}
-                await q.edit_message_text(
-                    f"✅ Sesión creada\n"
-                    f"📦 `{title}`\n"
-                    f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
-                    f"📤 *Sesión seleccionada*\n\n"
-                    f"Escribe el mensaje:",
-                    parse_mode="Markdown",
-                )
+            ctx.bot_data["send_target"] = {"session_id": sid, "directory": cwd}
+            await q.edit_message_text(
+                f"✅ Sesión creada\n"
+                f"📦 `{title}`\n"
+                f"📂 `{Path(cwd).name}` | 🧩 `{model_label}`\n\n"
+                f"📤 *Sesión seleccionada*\n\n"
+                f"Escribe el mensaje:",
+                parse_mode="Markdown",
+            )
         else:
             await q.edit_message_text(
                 f"✅ Sesión creada\n"
@@ -2818,7 +2812,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             _untracked_reply = True
 
     if _reply_target:
-        # Reply always bypasses send_mode and send_target
+        # Reply always bypasses send_target
         sid       = _reply_target["session_id"]
         directory = _reply_target["directory"]
     else:
@@ -2826,16 +2820,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "⚠️ No puedo enrutar este reply (mensaje antiguo o no rastreado). Usando la sesión activa."
             )
-        # /send flow: if in send mode, show wizard for each message
-        send_mode = ctx.bot_data.get("send_mode")
-        if send_mode:
-            # Store the pending text and show project picker
-            ctx.bot_data["send_pending_text"] = text
-            await cmd_send(update, ctx)
-            return
 
-        # Normal flow: explicit target from picker or resolve target
-        send_target = ctx.bot_data.get("send_target")
+        # One-shot send target or resolve normal active session
+        send_target = ctx.bot_data.pop("send_target", None)
         if send_target:
             sid       = send_target["session_id"]
             directory = send_target["directory"]
@@ -2889,27 +2876,23 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     provider_id = pending["providerID"] if pending else None
     model_id    = pending["modelID"]    if pending else None
     variant     = ctx.bot_data.get("session_variant", {}).get(sid)
-
-    send_mode = ctx.bot_data.get("send_target")
     
     try:
         sess_info = await oc.get_session(sid, directory=directory)
         sess_title = sess_info.get("title") or sid[:12]
-        model_obj = sess_info.get("model", {})
-        model_short = ""
-        if model_obj:
-            model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
-            model_short = model_full.split("/")[-1] if "/" in model_full else model_full
+        if pending:
+            model_short = model_id or ""
+        else:
+            model_obj = sess_info.get("model", {})
+            model_short = ""
+            if model_obj:
+                model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
+                model_short = model_full.split("/")[-1] if "/" in model_full else model_full
     except Exception:
         sess_title = sid[:12]
-        model_short = ""
+        model_short = model_id if pending else ""
 
-    send_indicator = " 📤" if send_mode else ""
-    session_info = f"📦 `{sess_title[:16]}`{send_indicator}" if send_mode else ""
-    
     status_text = f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
-    if session_info:
-        status_text += f"{session_info}\n"
     status_text += f"🧩 `{model_short or '...'}` | ⏱ `00:00`\n\n_Pulsa_ /esc _para cancelar_"
     
     sent = await update.message.reply_text(
@@ -2968,27 +2951,7 @@ async def cmd_restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Enter send mode or show project picker."""
-    pending_text = ctx.bot_data.pop("send_pending_text", None)
-    
-    if pending_text:
-        # User sent text while in send mode - store it and show picker
-        ctx.bot_data["send_mode_text"] = pending_text
-    elif not ctx.bot_data.get("send_mode"):
-        # First call to /send - activate mode
-        ctx.bot_data["send_mode"] = True
-        await update.message.reply_text(
-            "📤 *Modo send activado*\n\n"
-            "Cada mensaje que envíes requerirá elegir proyecto y sesión.\n"
-            "Usa /endsend para salir del modo.",
-            parse_mode="Markdown",
-        )
-        return
-    else:
-        # Already in send mode — just acknowledge, don't show picker
-        await update.message.reply_text("📤 Modo send activo.")
-        return
-    
+    """Show project picker for one-shot send."""
     try:
         all_sessions = await oc.list_sessions()
     except Exception as exc:
@@ -3020,13 +2983,8 @@ async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )])
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
-    text_hint = ""
-    if ctx.bot_data.get("send_mode_text"):
-        preview = ctx.bot_data["send_mode_text"][:50]
-        text_hint = f"📝 `{preview}{'...' if len(preview) < len(ctx.bot_data['send_mode_text']) else ''}`\n\n"
-    
     await update.message.reply_text(
-        f"📤 *Elige destino*\n\n{text_hint}¿A qué proyecto?",
+        f"📤 *Elige destino*\n\n¿A qué proyecto?",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -3049,12 +3007,6 @@ async def _show_send_session_picker(q, ctx, directory: str, sessions: list[dict]
         else:
             roots.append(s)
 
-    pending_text = ctx.bot_data.get("send_mode_text")
-    text_hint = ""
-    if pending_text:
-        preview = pending_text[:40]
-        text_hint = f"📝 `{preview}{'...' if len(pending_text) > 40 else ''}`\n\n"
-
     btns = [[InlineKeyboardButton("➕ Nueva sesión", callback_data=f"sendnewsess:{dk}")]]
     for s in roots[:10]:
         sid   = s.get("id", "")
@@ -3071,7 +3023,7 @@ async def _show_send_session_picker(q, ctx, directory: str, sessions: list[dict]
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await q.edit_message_text(
-        f"📂 `{cwd_path.name}` — {len(roots)} sesión{'es' if len(roots) != 1 else ''}\n\n{text_hint}Elige sesión:",
+        f"📂 `{cwd_path.name}` — {len(roots)} sesión{'es' if len(roots) != 1 else ''}\n\nElige sesión:",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -3102,86 +3054,18 @@ async def cb_sendsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     dk    = int(parts[2])
     directory = _val(ctx, dk)
 
-    pending_text = ctx.bot_data.pop("send_mode_text", None)
-    
-    if pending_text:
-        await q.edit_message_text(
-            f"📤 Enviando a `{Path(directory).name}`...",
-            parse_mode="Markdown",
-        )
-        await _do_send_text(ctx.application, pending_text, sid, directory, q.message.chat_id)
-    else:
-        ctx.bot_data["send_target"] = {"session_id": sid, "directory": directory}
-        try:
-            sess_info = await oc.get_session(sid, directory=directory)
-            title     = sess_info.get("title") or sid[:12]
-        except Exception:
-            title = sid[:12]
-        await q.edit_message_text(
-            f"📂 `{Path(directory).name}` · `{title}`\n\n"
-            f"📤 *Sesión seleccionada*\n\n"
-            f"Escribe el mensaje:",
-            parse_mode="Markdown",
-        )
-
-
-async def _do_send_text(app: Application, text: str, sid: str, directory: str, chat_id: int):
-    """Send text to session without going through handle_text."""
-    cwd_name = Path(directory).name or "?"
-    
+    ctx.bot_data["send_target"] = {"session_id": sid, "directory": directory}
     try:
         sess_info = await oc.get_session(sid, directory=directory)
-        sess_title = sess_info.get("title") or sid[:12]
-        model_obj = sess_info.get("model", {})
-        model_short = ""
-        if model_obj:
-            model_full = f"{model_obj.get('providerID','')}/{model_obj.get('id','')}"
-            model_short = model_full.split("/")[-1] if "/" in model_full else model_full
+        title     = sess_info.get("title") or sid[:12]
     except Exception:
-        sess_title = sid[:12]
-        model_short = ""
-
-    statuses = app.bot_data.get("statuses", {})
-    if sid in statuses:
-        queues = app.bot_data.setdefault("queues", {})
-        q = queues.setdefault(sid, deque())
-        q.append({"text": text, "directory": directory})
-        await app.bot.send_message(
-            chat_id,
-            f"⏳ `{cwd_name}` ocupado. Mensaje encolado.",
-            parse_mode="Markdown",
-        )
-        return
-
-    pending_models = app.bot_data.get("pending_model", {})
-    pending = pending_models.pop(sid, None)
-    provider_id = pending["providerID"] if pending else None
-    model_id    = pending["modelID"]    if pending else None
-    variant     = app.bot_data.get("session_variant", {}).get(sid)
-
-    sent = await app.bot.send_message(
-        chat_id,
-        f"⚪ *WAITING* | 📂 `{cwd_name}`\n"
-        f"📦 `{sess_title[:16]}` 📤\n"
-        f"🧩 `{model_short or '...'}` | ⏱ `00:00`\n\n"
-        f"_Pulsa_ /esc _para cancelar_",
+        title = sid[:12]
+    await q.edit_message_text(
+        f"📂 `{Path(directory).name}` · `{title}`\n\n"
+        f"📤 *Sesión seleccionada*\n\n"
+        f"Escribe el mensaje:",
         parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
-        ]]),
     )
-    _start_status(app, sid, directory, sent.message_id, model=model_short, session_title=sess_title, pending=True)
-    _track_msg(app, sent.message_id, sid, directory)
-
-    try:
-        await oc.send_message_async(sid, text, directory=directory,
-                                    provider_id=provider_id, model_id=model_id,
-                                    variant=variant)
-    except Exception as exc:
-        statuses = app.bot_data.get("statuses", {})
-        statuses.pop(sid, None)
-        await app.bot.delete_message(chat_id=chat_id, message_id=sent.message_id)
-        await app.bot.send_message(chat_id, f"❌ Error al enviar: {exc}")
 
 
 async def cb_sendnewsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -3269,36 +3153,23 @@ async def _do_send_delete_session(q, ctx, sid: str, directory: str, dk: int):
 
 
 def _clear_send_mode(bot_data: dict) -> bool:
-    """Clear all send mode state. Returns True if send mode was active."""
-    was_active = bool(bot_data.pop("send_mode", None) or bot_data.pop("send_target", None))
-    bot_data.pop("send_pending_text", None)
-    bot_data.pop("send_mode_text", None)
+    """Clear any pending send target. Returns True if there was one."""
+    was_active = bool(bot_data.pop("send_target", None))
+    bot_data.pop("send_new_sess_dir", None)
     return was_active
 
 
 @admin_only
 async def cmd_endsend(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Exit send mode."""
-    send_mode = ctx.bot_data.get("send_mode")
-    send_target = ctx.bot_data.get("send_target")
-    _clear_send_mode(ctx.bot_data)
-    
-    if send_mode:
+    """Cancel pending /send target."""
+    was_active = _clear_send_mode(ctx.bot_data)
+    if was_active:
         await update.message.reply_text(
-            "📤 *Modo send desactivado*\n\n"
-            "Los mensajes directos ahora van a la sesión activa normal.",
-            parse_mode="Markdown",
-        )
-    elif send_target:
-        directory = send_target.get("directory", "")
-        cwd_name = Path(directory).name if directory else "?"
-        await update.message.reply_text(
-            f"📤 Sesión de send liberada (`{cwd_name}`)\n\n"
-            f"Los mensajes directos ahora van a la sesión activa normal.",
+            "📤 Envío pendiente cancelado.",
             parse_mode="Markdown",
         )
     else:
-        await update.message.reply_text("⚠️ No estás en modo send.")
+        await update.message.reply_text("⚠️ No hay ningún envío pendiente.")
 
 
 # ---------------------------------------------------------------------------
