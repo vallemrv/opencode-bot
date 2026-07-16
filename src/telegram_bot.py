@@ -451,6 +451,28 @@ def _start_status(app: Application, session_id: str, directory: str, msg_id: int
         )
 
 
+async def _session_actually_idle(directory: str, session_id: str) -> bool | None:
+    """Best-effort confirmation that a session's current turn has really finished.
+
+    GET /session/{id} does not reliably populate `status` (it is often absent
+    regardless of whether the session is busy or idle), so that field can't be
+    trusted. Instead we look at the last message: an assistant message with a
+    completion timestamp means the turn is done; anything else means it's still
+    working. Returns None if the check itself failed (caller should fall back
+    to trusting the event that triggered it).
+    """
+    try:
+        messages = await oc.get_messages(session_id, directory=directory)
+    except Exception:
+        return None
+    if not messages:
+        return None
+    info = messages[-1].get("info", {})
+    if info.get("role") != "assistant":
+        return False
+    return bool(info.get("time", {}).get("completed"))
+
+
 async def _finish_status(app: Application, session_id: str):
     statuses = app.bot_data.get("statuses", {})
     st = statuses.pop(session_id, None)
@@ -1116,20 +1138,13 @@ async def sse_listener(app: Application) -> None:
                     if is_child:
                         continue
                     if st:
-                        # Verify with API that session is actually idle before finishing.
-                        # When a new session is created in the same project, OpenCode may
-                        # send stale idle events for other sessions. Double-check to avoid
-                        # prematurely finishing an active session.
-                        try:
-                            sess_info = await oc.get_session(effective_sid, directory=st.get("directory", ""))
-                            srv_status = sess_info.get("status") or {}
-                            srv_type = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
-                            if srv_type != "idle":
-                                # Not explicitly confirmed idle (busy/retry/None/missing) — keep waiting
-                                logger.info(f"Ignoring stale idle event for {effective_sid[:12]} (server says {srv_type!r})")
-                                continue
-                        except Exception:
-                            pass  # If API unreachable, proceed with idle (safe default)
+                        # Verify against the last message before finishing. GET /session/{id}
+                        # doesn't reliably report `status`, so we can't use it here; when the
+                        # check itself fails we trust the idle event (safe default).
+                        idle_confirmed = await _session_actually_idle(st.get("directory", ""), effective_sid)
+                        if idle_confirmed is False:
+                            logger.info(f"Ignoring stale idle event for {effective_sid[:12]} (last message still in progress)")
+                            continue
                         await _finish_status(app, effective_sid)
                 continue
 
@@ -1138,16 +1153,10 @@ async def sse_listener(app: Application) -> None:
                     continue
                 if st:
                     # Same stale-event protection as session.status idle
-                    try:
-                        sess_info = await oc.get_session(effective_sid, directory=st.get("directory", ""))
-                        srv_status = sess_info.get("status") or {}
-                        srv_type = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
-                        if srv_type != "idle":
-                            # Not explicitly confirmed idle (busy/retry/None/missing) — keep waiting
-                            logger.info(f"Ignoring stale session.idle for {effective_sid[:12]} (server says {srv_type!r})")
-                            continue
-                    except Exception:
-                        pass
+                    idle_confirmed = await _session_actually_idle(st.get("directory", ""), effective_sid)
+                    if idle_confirmed is False:
+                        logger.info(f"Ignoring stale session.idle for {effective_sid[:12]} (last message still in progress)")
+                        continue
                     await _finish_status(app, effective_sid)
                 continue
 
@@ -3000,25 +3009,14 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     cwd_name = Path(directory).name or "?"
 
     # If session is currently busy, queue the message locally and notify.
-    # We double-check with the server to avoid stale statuses (e.g. lost SSE events).
+    # We double-check against the last message to avoid stale statuses (e.g. lost SSE events).
     statuses = ctx.bot_data.get("statuses", {})
     if sid in statuses:
-        # Verify the server actually thinks the session is still busy
-        server_busy = True
-        try:
-            sess_info  = await oc.get_session(sid, directory=directory)
-            srv_status = sess_info.get("status") or {}
-            srv_type   = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
-            if srv_type == "idle":
-                # Server explicitly confirms idle — our status is stale, clean it up.
-                # Anything else (busy/retry/None/missing) is treated as still busy: the
-                # API doesn't always populate `status` mid-generation, so absence must
-                # not be read as confirmation of idleness.
-                server_busy = False
-                logger.info(f"Stale status for {sid[:12]}, server is {srv_type!r} — clearing")
-                await _finish_status(ctx.application, sid)
-        except Exception:
-            pass  # If we can't reach the server, assume busy (safe default)
+        idle_confirmed = await _session_actually_idle(directory, sid)
+        server_busy = idle_confirmed is not True  # None (check failed) or False -> assume busy
+        if not server_busy:
+            logger.info(f"Stale status for {sid[:12]} — last message already completed, clearing")
+            await _finish_status(ctx.application, sid)
 
         if server_busy:
             queues = ctx.bot_data.setdefault("queues", {})
