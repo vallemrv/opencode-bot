@@ -3340,9 +3340,10 @@ async def cmd_tree(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if len(text) > 4000:
         import io
-        data = io.BytesIO(body.encode("utf-8"))
-        data.name = "tree.txt"
-        await update.message.reply_document(document=data, filename="tree.txt", caption=f"📂 {base}")
+        md_body = f"# 📂 {base}\n\n```\n{body}\n```\n"
+        data = io.BytesIO(md_body.encode("utf-8"))
+        data.name = "tree.md"
+        await update.message.reply_document(document=data, filename="tree.md", caption=f"📂 {base}")
         return
 
     await update.message.reply_text(text, parse_mode="MarkdownV2")
