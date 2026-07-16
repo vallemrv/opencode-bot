@@ -206,23 +206,77 @@ async def _resolve_target(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> dic
     return None
 
 
+TOOL_INFO: dict[str, tuple[str, str]] = {
+    "read":                     ("📖", "Leyendo"),
+    "write":                    ("📝", "Editando"),
+    "edit":                     ("📝", "Editando"),
+    "patch":                    ("📝", "Aplicando cambios"),
+    "bash":                     ("⚡", "Ejecutando"),
+    "bash_output":              ("⚡", "Ejecutando"),
+    "grep":                     ("🔍", "Buscando texto"),
+    "glob":                     ("🔍", "Buscando archivos"),
+    "task":                     ("🤖", "Subagente"),
+    "question":                 ("❓", "Preguntando"),
+    "webfetch":                 ("🌐", "Consultando web"),
+    "web_search":               ("🌐", "Buscando en web"),
+    "list":                     ("📂", "Listando"),
+    "ls":                       ("📂", "Listando"),
+    "todo_write":               ("📋", "Planificando"),
+    "notebook_read":            ("📓", "Leyendo notebook"),
+    "notebook_edit":            ("📓", "Editando notebook"),
+    "ask_user_question":        ("❓", "Preguntando"),
+    "skill":                    ("🧩", "Cargando skill"),
+    "exit_plan_mode":           ("🎯", "Finalizando plan"),
+    "enter_plan_mode":          ("🎯", "Planificando"),
+}
+
+
+def _describe_tool(tool_name: str, tool_input: dict | None) -> str:
+    """Return a human-readable description of what the tool is doing."""
+    tool_lower = tool_name.lower()
+    icon, verb = TOOL_INFO.get(tool_name, ("🔧", f"Usando {tool_name}"))
+    # Also check lowercase
+    for key, (ic, vb) in TOOL_INFO.items():
+        if tool_lower == key.lower() and tool_name not in TOOL_INFO:
+            icon, verb = ic, vb
+            break
+
+    target = ""
+    if tool_input:
+        for key in ("path", "file_path", "filePath", "target_file", "pattern"):
+            val = tool_input.get(key)
+            if val and isinstance(val, str):
+                target = Path(val).name if key != "pattern" else f"\"{val}\""
+                break
+
+    if target:
+        return f"{icon} {verb} `{target[:40]}`"
+    return f"{icon} {verb}"
+
+
 def _build_status_text(st: dict) -> str:
     state      = st.get("state", "busy")
     tool       = st.get("tool")
+    tool_input = st.get("tool_input")
     files      = st.get("files_edited", set())
     tools_seen = st.get("tools_seen", [])
     directory  = st.get("directory", "")
     cwd_name   = Path(directory).name or "?"
     model      = st.get("model") or "default"
     reasoning  = st.get("reasoning_text") or ""
+    last_text  = st.get("last_text") or ""
     sess_title = st.get("session_title") or ""
 
     elapsed_str = _format_elapsed(time.time() - st.get("start_time", time.time()))
-    icons = {"pending": "⚪", "busy": "🔴", "thinking": "🤔", "idle": "🟢", "error": "❌"}
-    icon  = icons.get(state, "⚪")
-    state_labels = {"pending": "WAITING", "busy": "BUSY", "thinking": "THINKING", "idle": "IDLE", "error": "ERROR"}
-    state_label = state_labels.get(state, state.upper())
 
+    state_info = {
+        "pending":  ("⚪", "CONECTANDO",   "Conectando con OpenCode..."),
+        "busy":     ("🔴", "TRABAJANDO",   ""),
+        "thinking": ("🤔", "PENSANDO",      ""),
+        "idle":     ("🟢", "LISTO",        ""),
+        "error":    ("❌", "ERROR",         ""),
+    }
+    icon, state_label, state_desc = state_info.get(state, ("⚪", state.upper(), ""))
     model_short = model.split("/")[-1] if "/" in model else model
 
     title_part = f" · `{sess_title[:20]}`" if sess_title else ""
@@ -231,24 +285,40 @@ def _build_status_text(st: dict) -> str:
         f"🧩 `{model_short}` | ⏱ `{elapsed_str}`",
     ]
 
+    # ---- action line: what is the model doing right now ----
+    if state == "pending":
+        lines.append(state_desc)
+    elif state == "thinking" and reasoning:
+        snippet = reasoning[-300:].replace("`", "'").replace("*", "").strip()
+        lines.append(f"💭 _{snippet}_")
+    elif state == "thinking":
+        lines.append("💭 _Analizando..._")
+    elif state == "busy":
+        if tool:
+            lines.append(_describe_tool(tool, tool_input))
+        elif last_text:
+            snippet = last_text[-150:].replace("*", "").strip()
+            lines.append(f"💬 _{snippet[:120]}_")
+        else:
+            lines.append("_Generando respuesta..._")
+
+    # ---- tools used so far (compact) ----
+    unique_tools = list(dict.fromkeys(tools_seen))
+    if unique_tools:
+        tool_icons = []
+        for t in unique_tools[-8:]:
+            ic, _ = TOOL_INFO.get(t, ("🔧", ""))
+            tool_icons.append(f"{ic}`{t}`")
+        lines.append(" · ".join(tool_icons))
+
+    # ---- files edited ----
     if files:
         files_str = ", ".join(f"`{f}`" for f in list(files)[:4])
         if len(files) > 4:
             files_str += f" +{len(files)-4}"
         lines.append(f"📝 {files_str}")
 
-    if tool:
-        lines.append(f"🔧 `{tool}`")
-
-    unique_tools = list(dict.fromkeys(tools_seen))
-    if unique_tools and not tool:
-        tools_str = " · ".join(f"`{t}`" for t in unique_tools[-5:])
-        lines.append(f"⚡ {tools_str}")
-
-    if reasoning and state == "thinking":
-        snippet = reasoning[-200:].replace("`", "'").replace("*", "").strip()
-        lines.append(f"💭 _{snippet}_")
-
+    # ---- footer: cost + context ----
     msg_costs  = st.get("msg_costs", {})
     total_cost = sum(v for v in msg_costs.values() if isinstance(v, (int, float)))
     ctx_tokens = st.get("ctx_tokens", 0)
@@ -261,6 +331,41 @@ def _build_status_text(st: dict) -> str:
     lines.append("")
     lines.append("_Pulsa_ /esc _para cancelar_")
     return "\n".join(lines)
+
+
+async def _reposition_status(app: Application, session_id: str) -> None:
+    """Delete the current status message and re-send it at the bottom of the chat."""
+    statuses = app.bot_data.get("statuses", {})
+
+    child_map = app.bot_data.get("child_to_parent", {})
+    effective_sid = session_id
+    if session_id not in statuses and session_id in child_map:
+        effective_sid = child_map[session_id]
+
+    st = statuses.get(effective_sid)
+    if not st or not st.get("msg_id"):
+        return
+
+    old_msg_id = st["msg_id"]
+    st["msg_id"] = None
+
+    try:
+        await app.bot.delete_message(chat_id=ADMIN_ID, message_id=old_msg_id)
+    except Exception:
+        pass
+
+    try:
+        sent = await app.bot.send_message(
+            ADMIN_ID,
+            text=_build_status_text(st),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Cancelar", callback_data="abort:")
+            ]]),
+        )
+        st["msg_id"] = sent.message_id
+    except Exception as exc:
+        logger.warning(f"Failed to reposition status: {exc}")
 
 
 async def _update_status_now(app: Application, session_id: str, force: bool = False):
@@ -1019,8 +1124,9 @@ async def sse_listener(app: Application) -> None:
                             sess_info = await oc.get_session(effective_sid, directory=st.get("directory", ""))
                             srv_status = sess_info.get("status") or {}
                             srv_type = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
-                            if srv_type in ("busy", "retry"):
-                                logger.info(f"Ignoring stale idle event for {effective_sid[:12]} (server says {srv_type})")
+                            if srv_type != "idle":
+                                # Not explicitly confirmed idle (busy/retry/None/missing) — keep waiting
+                                logger.info(f"Ignoring stale idle event for {effective_sid[:12]} (server says {srv_type!r})")
                                 continue
                         except Exception:
                             pass  # If API unreachable, proceed with idle (safe default)
@@ -1036,8 +1142,9 @@ async def sse_listener(app: Application) -> None:
                         sess_info = await oc.get_session(effective_sid, directory=st.get("directory", ""))
                         srv_status = sess_info.get("status") or {}
                         srv_type = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
-                        if srv_type in ("busy", "retry"):
-                            logger.info(f"Ignoring stale session.idle for {effective_sid[:12]} (server says {srv_type})")
+                        if srv_type != "idle":
+                            # Not explicitly confirmed idle (busy/retry/None/missing) — keep waiting
+                            logger.info(f"Ignoring stale session.idle for {effective_sid[:12]} (server says {srv_type!r})")
                             continue
                     except Exception:
                         pass
@@ -1154,8 +1261,9 @@ async def sse_listener(app: Application) -> None:
                 if part_type == "step-start":
                     # New step: clear current tool and last_text fragment,
                     # but preserve final_text accumulated so far across steps.
-                    st["last_text"] = None
-                    st["tool"]      = None
+                    st["last_text"]  = None
+                    st["tool"]       = None
+                    st["tool_input"] = None
 
                 elif part_type == "text":
                     st["state"] = "busy"
@@ -1181,6 +1289,7 @@ async def sse_listener(app: Application) -> None:
                     tool_input = part.get("input") or (part.get("state") or {}).get("input") or {}
                     if tool_name:
                         st["tool"] = tool_name
+                        st["tool_input"] = tool_input
                         if tool_name not in st["tools_seen"]:
                             st["tools_seen"].append(tool_name)
                         EDIT_TOOLS = {"write", "edit", "patch", "fs_write", "str_replace_editor",
@@ -1790,6 +1899,8 @@ async def _send_question_answer(app: Application, req_id: str, session_id: str, 
             except Exception:
                 pass
 
+    await _reposition_status(app, session_id)
+
 
 async def cb_qans(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Option button pressed for a question."""
@@ -1889,6 +2000,7 @@ async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     req_id = _val(ctx, int(parts[1]))
 
     q_data    = ctx.bot_data.get("pending_questions", {}).get(req_id, {})
+    session_id = q_data.get("session_id", "")
     directory = q_data.get("directory", "")
 
     try:
@@ -1906,6 +2018,9 @@ async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception:
                 pass
+
+    if session_id:
+        await _reposition_status(ctx.application, session_id)
 
     await q.edit_message_text("❌ Pregunta cancelada. OpenCode continuará sin respuesta.")
 
@@ -2847,8 +2962,11 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             sess_info  = await oc.get_session(sid, directory=directory)
             srv_status = sess_info.get("status") or {}
             srv_type   = srv_status.get("type") if isinstance(srv_status, dict) else str(srv_status)
-            if srv_type not in ("busy", "retry"):
-                # Server says idle — our status is stale, clean it up
+            if srv_type == "idle":
+                # Server explicitly confirms idle — our status is stale, clean it up.
+                # Anything else (busy/retry/None/missing) is treated as still busy: the
+                # API doesn't always populate `status` mid-generation, so absence must
+                # not be read as confirmation of idleness.
                 server_busy = False
                 logger.info(f"Stale status for {sid[:12]}, server is {srv_type!r} — clearing")
                 await _finish_status(ctx.application, sid)
@@ -2943,6 +3061,163 @@ async def cmd_restart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await svc_proc.wait()
 
 
+# ---------------------------------------------------------------------------
+# /git — check repo status (clean, pushed, etc.)
+# ---------------------------------------------------------------------------
+
+STATUS_ICONS = {
+    "M":  ("📄", "modificado"),
+    "A":  ("➕", "nuevo"),
+    "D":  ("➖", "eliminado"),
+    "R":  ("🔄", "renombrado"),
+    "C":  ("📋", "copiado"),
+    "U":  ("⚠️", "conflicto"),
+    "??": ("❓", "sin seguir"),
+}
+
+
+def _parse_git_status(porcelain: str) -> list[tuple[str, str, str]]:
+    """Parse git status --porcelain into [(icon, label, filepath), ...]."""
+    entries: list[tuple[str, str, str]] = []
+    for line in porcelain.strip().split("\n"):
+        if not line:
+            continue
+        code = line[:2].strip()
+        fpath = line[3:].strip()
+        if " -> " in fpath and code.startswith("R"):
+            fpath = fpath.split(" -> ")[-1]
+        icon, label = STATUS_ICONS.get(code, STATUS_ICONS.get(code[0], ("•", code)))
+        entries.append((icon, label, fpath))
+    return entries
+
+
+async def _git_numstat(repo_root: str, staged: bool = False) -> tuple[int, int]:
+    """Return (lines_added, lines_deleted) from git diff --numstat."""
+    args = ["diff", "--cached", "--numstat"] if staged else ["diff", "--numstat"]
+    raw = await _git_cmd(repo_root, *args)
+    added, deleted = 0, 0
+    for line in raw.strip().split("\n"):
+        parts = line.split()
+        if len(parts) >= 2:
+            try:
+                added += int(parts[0]) if parts[0] != "-" else 0
+                deleted += int(parts[1]) if parts[1] != "-" else 0
+            except ValueError:
+                pass
+    return added, deleted
+
+
+@admin_only
+async def cmd_git(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Check if the active repo is fully committed and pushed."""
+    active = await db.get_active()
+    if not active:
+        await update.message.reply_text("❌ No hay sesión activa. Usa /open primero.")
+        return
+
+    directory = active.get("directory", "")
+    if not directory:
+        await update.message.reply_text("❌ No hay directorio en la sesión activa.")
+        return
+
+    repo_root = await _git_root(directory)
+    if not repo_root:
+        await update.message.reply_text("❌ El directorio activo no está en un repo git.")
+        return
+
+    msg = await update.message.reply_text("⏳ *Consultando git...*", parse_mode="Markdown")
+
+    try:
+        lines: list[str] = []
+
+        branch = await _git_cmd(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+        cwd_name = Path(repo_root).name
+        lines.append(f"📂 `{cwd_name}` · 🌿 `{branch or 'HEAD'}`")
+
+        porcelain = await _git_cmd(repo_root, "status", "--porcelain")
+        files = _parse_git_status(porcelain)
+
+        if files:
+            lines.append(f"📝 *{len(files)}* cambio(s) sin commitear:")
+            for icon, label, fpath in files:
+                lines.append(f"  {icon} _{label}_  `{fpath}`")
+        else:
+            lines.append("✅ Repo limpio (todo commiteado).")
+
+        staged_add, staged_del = await _git_numstat(repo_root, staged=True)
+        unstaged_add, unstaged_del = await _git_numstat(repo_root, staged=False)
+        total_add = staged_add + unstaged_add
+        total_del = staged_del + unstaged_del
+
+        if total_add or total_del:
+            parts = []
+            if total_add:
+                parts.append(f"➕ `{total_add}` líneas añadidas")
+            if total_del:
+                parts.append(f"➖ `{total_del}` líneas eliminadas")
+            lines.append("📊 " + " · ".join(parts))
+
+        behind, ahead = await _git_ahead_behind(repo_root, branch)
+        sync_parts = []
+        if behind:
+            sync_parts.append(f"⬇️ `{behind}` detrás de `origin`")
+        if ahead:
+            sync_parts.append(f"⬆️ `{ahead}` sin pushear")
+        if sync_parts:
+            lines.append(" · ".join(sync_parts))
+
+        if not behind and not ahead and not files:
+            lines.append("🚀 Repo *al día* y completamente sincronizado.")
+
+        await msg.edit_text("\n".join(lines), parse_mode="Markdown")
+
+    except Exception as exc:
+        await msg.edit_text(f"❌ Error consultando git: {exc}")
+
+
+async def _git_root(path: str) -> str | None:
+    """Get the root directory of a git repo, or None."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "-C", path, "rev-parse", "--show-toplevel",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        return stdout.decode().strip() or None
+    except Exception:
+        return None
+
+
+async def _git_cmd(repo_root: str, *args: str) -> str:
+    """Run a git command in repo_root and return stdout."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "-C", repo_root, *args,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        return stdout.decode().strip()
+    except Exception:
+        return ""
+
+
+async def _git_ahead_behind(repo_root: str, branch: str) -> tuple[str, str]:
+    """Return (behind, ahead) commit counts vs upstream tracking branch."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "-C", repo_root, "rev-list", "--left-right", "--count",
+            f"{branch}...@{{u}}",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return "", ""
+        parts = stdout.decode().strip().split()
+        if len(parts) == 2:
+            return parts[0], parts[1]
+    except Exception:
+        pass
+    return "", ""
 
 
 # ---------------------------------------------------------------------------
@@ -3260,6 +3535,7 @@ def main():
     app.add_handler(CommandHandler("send",     cmd_send))
     app.add_handler(CommandHandler("endsend",  cmd_endsend))
     app.add_handler(CommandHandler("restart",  cmd_restart))
+    app.add_handler(CommandHandler("git",      cmd_git))
 
     app.add_handler(CallbackQueryHandler(cb_ob,        pattern=r"^ob:"))
     app.add_handler(CallbackQueryHandler(cb_mkdir,     pattern=r"^mkdir:"))
@@ -3338,6 +3614,7 @@ def main():
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),
             BotCommand("effort",   "Esfuerzo de razonamiento de la sesión activa"),
             BotCommand("restart",  "Reiniciar el bot"),
+            BotCommand("git",      "Ver estado git del proyecto activo"),
             BotCommand("esc",      "Cancelar tarea actual"),
         ])
         
