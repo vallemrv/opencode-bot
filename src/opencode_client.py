@@ -215,6 +215,17 @@ class OpenCodeClient:
     async def abort_session(self, session_id: str, directory: str | None = None) -> Any:
         return await self._post(f"/session/{session_id}/abort", {}, directory=directory)
 
+    async def summarize_session(
+        self,
+        session_id: str,
+        provider_id: str,
+        model_id: str,
+        directory: str | None = None,
+    ) -> Any:
+        """Ask OpenCode to compact the session: summarize history into a single message."""
+        body = {"providerID": provider_id, "modelID": model_id}
+        return await self._post(f"/session/{session_id}/summarize", body, directory=directory)
+
     async def respond_permission(
         self,
         session_id: str,

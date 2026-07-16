@@ -2684,6 +2684,53 @@ async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# /resumen (alias /compact) — pide a OpenCode que compacte el contexto
+# ---------------------------------------------------------------------------
+
+@admin_only
+async def cmd_resumen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    target = await _resolve_target(update, ctx)
+    if not target:
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
+        return
+    sid       = target["session_id"]
+    directory = target["directory"]
+    cwd_name  = Path(directory).name or "?"
+
+    if sid in ctx.bot_data.get("statuses", {}):
+        await update.message.reply_text(
+            "⚠️ La sesión está ocupada ahora mismo. Esperá a que termine (o usá /esc) antes de compactar."
+        )
+        return
+
+    try:
+        sess_info = await oc.get_session(sid, directory=directory)
+    except Exception as exc:
+        await update.message.reply_text(f"❌ Error al consultar la sesión: {exc}")
+        return
+
+    model_obj   = sess_info.get("model") or {}
+    provider_id = model_obj.get("providerID")
+    model_id    = model_obj.get("id")
+    if not provider_id or not model_id:
+        await update.message.reply_text("❌ No pude determinar el modelo de la sesión para compactar.")
+        return
+
+    wait_msg = await update.message.reply_text(
+        f"🗜 Compactando contexto de `{cwd_name}`\\.\\.\\.", parse_mode="MarkdownV2"
+    )
+    try:
+        await oc.summarize_session(sid, provider_id, model_id, directory=directory)
+    except Exception as exc:
+        await wait_msg.edit_text(f"❌ Error al compactar: {exc}")
+        return
+    await wait_msg.edit_text(
+        f"✅ Contexto de `{cwd_name}` compactado\\. OpenCode generó un resumen y siguió la conversación desde ahí\\.",
+        parse_mode="MarkdownV2",
+    )
+
+
+# ---------------------------------------------------------------------------
 # File upload → save to active session cwd
 # ---------------------------------------------------------------------------
 
@@ -3532,6 +3579,7 @@ def main():
     app.add_handler(CommandHandler("models",   cmd_models))
     app.add_handler(CommandHandler("effort",   cmd_effort))
     app.add_handler(CommandHandler("esc",      cmd_esc))
+    app.add_handler(CommandHandler(["resumen", "compact"], cmd_resumen))
     app.add_handler(CommandHandler("send",     cmd_send))
     app.add_handler(CommandHandler("endsend",  cmd_endsend))
     app.add_handler(CommandHandler("restart",  cmd_restart))
@@ -3616,6 +3664,7 @@ def main():
             BotCommand("restart",  "Reiniciar el bot"),
             BotCommand("git",      "Ver estado git del proyecto activo"),
             BotCommand("esc",      "Cancelar tarea actual"),
+            BotCommand("resumen",  "Compactar contexto de la sesión (resumen)"),
         ])
         
         if RESTART_FLAG.exists():
