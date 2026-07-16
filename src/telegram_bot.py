@@ -3266,6 +3266,161 @@ async def _git_ahead_behind(repo_root: str, branch: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# /tree — pretty directory tree of the active project
+# ---------------------------------------------------------------------------
+
+_TREE_SKIP = {
+    ".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
+    ".pytest_cache", ".ruff_cache", "dist", "build", ".next", ".cache", "target",
+}
+_TREE_MAX_DEPTH = 3
+_TREE_MAX_LINES = 300
+
+
+def _build_tree(root: Path, max_depth: int = _TREE_MAX_DEPTH) -> tuple[list[str], bool]:
+    """Build a pretty tree listing of root. Returns (lines, truncated)."""
+    lines: list[str] = []
+    truncated = False
+
+    def walk(path: Path, prefix: str, depth: int):
+        nonlocal truncated
+        if truncated:
+            return
+        try:
+            entries = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+        except (PermissionError, OSError):
+            return
+        entries = [e for e in entries if not (e.name.startswith(".") or e.name in _TREE_SKIP)]
+        for idx, entry in enumerate(entries):
+            if len(lines) >= _TREE_MAX_LINES:
+                truncated = True
+                return
+            last = idx == len(entries) - 1
+            connector = "└── " if last else "├── "
+            name = entry.name + "/" if entry.is_dir() else entry.name
+            lines.append(f"{prefix}{connector}{name}")
+            if entry.is_dir() and depth < max_depth:
+                walk(entry, prefix + ("    " if last else "│   "), depth + 1)
+
+    walk(root, "", 1)
+    return lines, truncated
+
+
+@admin_only
+async def cmd_tree(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    target = await _resolve_target(update, ctx)
+    if not target:
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
+        return
+
+    base = Path(target["directory"])
+    if ctx.args:
+        sub = Path(" ".join(ctx.args))
+        base = sub if sub.is_absolute() else base / sub
+
+    try:
+        base = base.resolve()
+    except OSError:
+        pass
+
+    if not base.exists():
+        await update.message.reply_text(f"❌ No existe `{base}`.", parse_mode="Markdown")
+        return
+    if not base.is_dir():
+        await update.message.reply_text(f"❌ `{base}` no es una carpeta. Usa /show.", parse_mode="Markdown")
+        return
+
+    lines, truncated = _build_tree(base)
+    body = f"{base.name or base}/\n" + ("\n".join(lines) if lines else "(vacío)")
+    if truncated:
+        body += "\n… (truncado)"
+
+    safe_body = body.replace("\\", "\\\\").replace("`", "\\`")
+    text = f"📂 `{md2tgv2._escape(str(base))}`\n```\n{safe_body}\n```"
+
+    if len(text) > 4000:
+        import io
+        data = io.BytesIO(body.encode("utf-8"))
+        data.name = "tree.txt"
+        await update.message.reply_document(document=data, filename="tree.txt", caption=f"📂 {base}")
+        return
+
+    await update.message.reply_text(text, parse_mode="MarkdownV2")
+
+
+# ---------------------------------------------------------------------------
+# /show — cat de un fichero del proyecto activo
+# ---------------------------------------------------------------------------
+
+_SHOW_MAX_INLINE  = 3500            # raw chars threshold to keep it inline vs document
+_SHOW_MAX_UPLOAD  = 15 * 1024 * 1024  # guard against accidentally catting something huge
+
+_LANG_BY_EXT = {
+    ".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "tsx",
+    ".jsx": "jsx", ".json": "json", ".sh": "bash", ".bash": "bash",
+    ".yml": "yaml", ".yaml": "yaml", ".md": "markdown", ".html": "html",
+    ".css": "css", ".go": "go", ".rs": "rust", ".java": "java", ".c": "c",
+    ".cpp": "cpp", ".rb": "ruby", ".php": "php", ".sql": "sql",
+    ".toml": "toml", ".xml": "xml",
+}
+
+
+@admin_only
+async def cmd_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
+        await update.message.reply_text("Uso: `/show ruta/al/fichero`", parse_mode="Markdown")
+        return
+
+    target = await _resolve_target(update, ctx)
+    if not target:
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
+        return
+
+    rel = Path(" ".join(ctx.args))
+    path = rel if rel.is_absolute() else Path(target["directory"]) / rel
+    try:
+        path = path.resolve()
+    except OSError:
+        pass
+
+    if not path.exists():
+        await update.message.reply_text(f"❌ No existe `{path}`.", parse_mode="Markdown")
+        return
+    if path.is_dir():
+        await update.message.reply_text(f"❌ `{path}` es una carpeta. Usa /tree.", parse_mode="Markdown")
+        return
+
+    size = path.stat().st_size
+    if size > _SHOW_MAX_UPLOAD:
+        await update.message.reply_text(f"❌ `{path.name}` pesa {size / 1024 / 1024:.1f} MB, demasiado grande.", parse_mode="Markdown")
+        return
+
+    raw = path.read_bytes()
+    try:
+        content: str | None = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        content = None
+
+    if content is None or len(content) > _SHOW_MAX_INLINE:
+        import io
+        data = io.BytesIO(raw)
+        data.name = path.name
+        caption = (
+            f"📄 {path.name} · {content.count(chr(10)) + 1} líneas"
+            if content is not None else f"📄 {path.name} · {size} bytes (binario)"
+        )
+        await update.message.reply_document(document=data, filename=path.name, caption=caption)
+        return
+
+    n_lines = content.count("\n") + 1
+    lang = _LANG_BY_EXT.get(path.suffix.lower(), "")
+    safe_body = content.replace("\\", "\\\\").replace("`", "\\`")
+    header = md2tgv2._escape(f"{path.name} · {n_lines} líneas")
+    text = f"📄 {header}\n```{lang}\n{safe_body}\n```"
+    await update.message.reply_text(text, parse_mode="MarkdownV2")
+
+
+# ---------------------------------------------------------------------------
 # /send — send a prompt to a specific project's active session
 # ---------------------------------------------------------------------------
 
@@ -3582,6 +3737,8 @@ def main():
     app.add_handler(CommandHandler("endsend",  cmd_endsend))
     app.add_handler(CommandHandler("restart",  cmd_restart))
     app.add_handler(CommandHandler("git",      cmd_git))
+    app.add_handler(CommandHandler("tree",     cmd_tree))
+    app.add_handler(CommandHandler("show",     cmd_show))
 
     app.add_handler(CallbackQueryHandler(cb_ob,        pattern=r"^ob:"))
     app.add_handler(CallbackQueryHandler(cb_mkdir,     pattern=r"^mkdir:"))
@@ -3661,6 +3818,8 @@ def main():
             BotCommand("effort",   "Esfuerzo de razonamiento de la sesión activa"),
             BotCommand("restart",  "Reiniciar el bot"),
             BotCommand("git",      "Ver estado git del proyecto activo"),
+            BotCommand("tree",     "Árbol de carpetas del proyecto activo"),
+            BotCommand("show",     "Ver contenido de un fichero"),
             BotCommand("esc",      "Cancelar tarea actual"),
             BotCommand("resumen",  "Compactar contexto de la sesión (resumen)"),
         ])
