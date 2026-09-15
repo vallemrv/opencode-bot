@@ -71,7 +71,7 @@ Casi todo el estado de runtime vive en `application.bot_data` (no en DB). Los m�
 Además de los comandos, el bot registra tres handlers de mensajes:
 
 - **Texto libre / voz** (`handle_message`) — Envía prompt a la sesión resuelta por `_resolve_target()`. Si la sesión está ocupada, encola en `queues`.
-- **Archivos (documentos, fotos, vídeos)** (`handle_file_upload`) — Descarga el archivo directamente al `directory` de la sesión activa. Requiere sesión activa; no envía prompt.
+- **Archivos (documentos, fotos, vídeos)** (`handle_file_upload`) — Descarga a `TMP_DIR` (no al proyecto, para no ensuciarlo con capturas/adjuntos); no requiere sesión activa ni envía prompt. Si hace falta en el proyecto, se pide explícitamente que lo muevan desde ahí.
 - **Audio / notas de voz** (`handle_audio_upload`) — Descarga a `TMP_DIR`, transcribe con X.AI STT, mueve el archivo al cwd si hay sesión activa, y envía la transcripción como prompt. Si la transcripción falla o no hay `XAI_API_KEY`, avisa al usuario.
 
 ### Convenciones de Telegram UI

@@ -2747,7 +2747,7 @@ TMP_DIR = Path("/tmp/opencode-bot-media")
 
 @admin_only
 async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Handle documents, photos, videos — save directly to the active session cwd."""
+    """Handle documents, photos, videos — save to tmp dir, not the project (avoids clutter)."""
     msg = update.message
     file_id: str | None = None
     file_name: str | None = None
@@ -2766,14 +2766,8 @@ async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("❌ Tipo de archivo no soportado.")
         return
 
-    active = await db.get_active()
-    if not active:
-        await msg.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
-        return
-
-    cwd      = active["directory"]
-    cwd_name = Path(cwd).name
-    save_path = Path(cwd) / file_name
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = TMP_DIR / file_name
 
     try:
         tg_file = await ctx.bot.get_file(file_id)
@@ -2785,7 +2779,8 @@ async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     caption = msg.caption or ""
     caption_note = f"\n📝 _{caption}_" if caption else ""
     await msg.reply_text(
-        f"✅ `{file_name}` guardado en `{cwd_name}`{caption_note}",
+        f"✅ `{file_name}` guardado en `{save_path}`\n"
+        f"Pide que lo muevan al proyecto si lo necesitas ahí.{caption_note}",
         parse_mode="Markdown",
     )
 
