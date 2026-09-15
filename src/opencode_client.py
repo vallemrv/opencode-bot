@@ -209,6 +209,14 @@ class OpenCodeClient:
             body["model"] = {"providerID": provider_id, "id": model_id}
         return await self._post("/session", body, directory=directory)
 
+    async def rename_session(
+        self, session_id: str, title: str, directory: str | None = None
+    ) -> dict:
+        """Rename a session (bypass OpenCode's own /rename). PATCH /session/{id}."""
+        return await self._patch(
+            f"/session/{session_id}", {"title": title}, directory=directory
+        )
+
     async def delete_session(self, session_id: str, directory: str | None = None) -> Any:
         return await self._delete(f"/session/{session_id}", directory=directory)
 

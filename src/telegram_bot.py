@@ -3422,6 +3422,50 @@ async def cmd_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# /rename — renombra la sesión activa (bypass del /rename de OpenCode)
+# ---------------------------------------------------------------------------
+
+@admin_only
+async def cmd_rename(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Renombra la sesión activa vía PATCH /session/{id}, sin pasar por el
+    comando /rename de OpenCode."""
+    if not ctx.args:
+        await update.message.reply_text(
+            "Uso: `/rename Nuevo nombre de la sesión`", parse_mode="Markdown"
+        )
+        return
+
+    target = await _resolve_target(update, ctx)
+    if not target:
+        await update.message.reply_text("⚠️ No hay sesión activa. Usa /open primero.")
+        return
+
+    sid       = target["session_id"]
+    directory = target["directory"]
+    new_title = " ".join(ctx.args).strip()
+
+    # Nombre actual (best-effort)
+    old_title = "?"
+    try:
+        info = await oc.get_session(sid, directory=directory)
+        old_title = info.get("title") or "sin nombre"
+    except Exception:
+        pass
+
+    try:
+        await oc.rename_session(sid, new_title, directory=directory)
+    except Exception as exc:
+        await update.message.reply_text(f"❌ Error al renombrar: {exc}")
+        return
+
+    await update.message.reply_text(
+        f"✅ Sesión renombrada\n\n*Antes:* {md2tgv2._escape(old_title)}\n"
+        f"*Ahora:* {md2tgv2._escape(new_title)}",
+        parse_mode="MarkdownV2",
+    )
+
+
+# ---------------------------------------------------------------------------
 # /send — send a prompt to a specific project's active session
 # ---------------------------------------------------------------------------
 
@@ -3740,6 +3784,7 @@ def main():
     app.add_handler(CommandHandler("git",      cmd_git))
     app.add_handler(CommandHandler("tree",     cmd_tree))
     app.add_handler(CommandHandler("show",     cmd_show))
+    app.add_handler(CommandHandler("rename",   cmd_rename))
 
     app.add_handler(CallbackQueryHandler(cb_ob,        pattern=r"^ob:"))
     app.add_handler(CallbackQueryHandler(cb_mkdir,     pattern=r"^mkdir:"))
@@ -3821,6 +3866,7 @@ def main():
             BotCommand("git",      "Ver estado git del proyecto activo"),
             BotCommand("tree",     "Árbol de carpetas del proyecto activo"),
             BotCommand("show",     "Ver contenido de un fichero"),
+            BotCommand("rename",   "Renombrar la sesión activa"),
             BotCommand("esc",      "Cancelar tarea actual"),
             BotCommand("resumen",  "Compactar contexto de la sesión (resumen)"),
         ])
