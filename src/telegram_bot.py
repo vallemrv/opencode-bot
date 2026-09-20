@@ -61,6 +61,7 @@ oc = OpenCodeClient(OC_HOST, OC_PORT)
 
 MODELS_CACHE_TTL = 300
 MODELS_FETCH_TIMEOUT = 15
+SEND_TARGET_TTL = 120  # /send es de un solo tiro: si no se escribe el mensaje en este tiempo, se descarta solo
 
 async def _get_models(ctx: ContextTypes.DEFAULT_TYPE) -> list[dict]:
     cache = ctx.bot_data.get("models_cache")
@@ -1734,7 +1735,7 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         send_new_dir = ctx.bot_data.pop("send_new_sess_dir", None)
         
         if send_new_dir and Path(send_new_dir).resolve() == Path(cwd).resolve():
-            ctx.bot_data["send_target"] = {"session_id": sid, "directory": cwd}
+            _set_send_target(ctx.bot_data, sid, cwd)
             await q.edit_message_text(
                 f"✅ Sesión creada\n"
                 f"📦 `{title}`\n"
@@ -2988,7 +2989,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             )
 
         # One-shot send target or resolve normal active session
-        send_target = ctx.bot_data.pop("send_target", None)
+        send_target = _pop_send_target(ctx.bot_data)
         if send_target:
             sid       = send_target["session_id"]
             directory = send_target["directory"]
@@ -3569,7 +3570,7 @@ async def cb_sendsess(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     dk    = int(parts[2])
     directory = _val(ctx, dk)
 
-    ctx.bot_data["send_target"] = {"session_id": sid, "directory": directory}
+    _set_send_target(ctx.bot_data, sid, directory)
     try:
         sess_info = await oc.get_session(sid, directory=directory)
         title     = sess_info.get("title") or sid[:12]
@@ -3667,9 +3668,27 @@ async def _do_send_delete_session(q, ctx, sid: str, directory: str, dk: int):
         )
 
 
+def _set_send_target(bot_data: dict, session_id: str, directory: str):
+    """Set a one-shot /send target with a TTL so it can't linger and hijack a later message."""
+    bot_data["send_target"] = {
+        "session_id": session_id,
+        "directory": directory,
+        "expires_at": time.time() + SEND_TARGET_TTL,
+    }
+
+
+def _pop_send_target(bot_data: dict) -> dict | None:
+    """Pop the pending /send target, discarding it silently if it has expired."""
+    target = bot_data.pop("send_target", None)
+    if target and target.get("expires_at", 0) < time.time():
+        return None
+    return target
+
+
 def _clear_send_mode(bot_data: dict) -> bool:
-    """Clear any pending send target. Returns True if there was one."""
-    was_active = bool(bot_data.pop("send_target", None))
+    """Clear any pending send target. Returns True if there was a non-expired one."""
+    target = bot_data.pop("send_target", None)
+    was_active = bool(target) and target.get("expires_at", 0) >= time.time()
     bot_data.pop("send_new_sess_dir", None)
     return was_active
 
@@ -3725,8 +3744,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🧩 Modelo: `{model_label}`\n\n"
             f"*Comandos*\n"
             f"/open — abrir proyecto o cambiar sesión\n"
-            f"/send — enviar prompt a proyecto (modo persistente)\n"
-            f"/endsend — salir del modo send persistente\n"
+            f"/send — enviar prompt a otro proyecto (un solo tiro)\n"
+            f"/endsend — cancelar un /send pendiente de escribir\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
@@ -3744,8 +3763,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Sin sesión activa ({total} sesiones en el servidor)\n\n"
             f"*Comandos*\n"
             f"/open — navega carpetas, elige proyecto y modelo, crea sesión\n"
-            f"/send — enviar prompt a proyecto (modo persistente)\n"
-            f"/endsend — salir del modo send persistente\n"
+            f"/send — enviar prompt a otro proyecto (un solo tiro)\n"
+            f"/endsend — cancelar un /send pendiente de escribir\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
@@ -3852,8 +3871,8 @@ def main():
             BotCommand("open",     "Abrir proyecto / sesión"),
             BotCommand("tmp",      "Abrir sesión de trabajo temporal"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
-            BotCommand("send",     "Enviar prompt a proyecto (modo persistente)"),
-            BotCommand("endsend",  "Salir del modo send persistente"),
+            BotCommand("send",     "Enviar prompt a otro proyecto (un solo tiro)"),
+            BotCommand("endsend",  "Cancelar un /send pendiente de escribir"),
             BotCommand("close",    "Cerrar proyecto"),
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),
             BotCommand("effort",   "Esfuerzo de razonamiento de la sesión activa"),
