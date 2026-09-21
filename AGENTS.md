@@ -71,7 +71,6 @@ El bot **no gestiona** el proceso de OpenCode, solo se conecta a él vía HTTP y
 | `/sessions` | Gestiona sesiones del proyecto activo |
 | `/models` | Cambia el modelo de la sesión activa |
 | `/send` | Envía un mensaje one-shot a un proyecto/sesión (elige proyecto → sesión → escribe) |
-| `/endsend` | Cancela el envío pendiente de /send |
 | `/esc` | Cancela la tarea en curso (abort) |
 | `/tmp` | Crea/activa un workspace temporal (`~/.local/share/opencode-bot/tmp`) como proyecto OpenCode |
 | `/effort` | Elige la variante de esfuerzo de razonamiento del modelo (low/medium/high/max) para la sesión |
@@ -112,7 +111,10 @@ Cualquier texto libre (o audio) envía un prompt a la sesión activa. Los replie
   └─ Elige proyecto → elige sesión → "Escribe el mensaje" → envía → fin
 ```
 
-`/endsend` cancela el envío pendiente si no se ha enviado el mensaje todavía.
+No cambia la sesión activa (ni aunque se cree una sesión nueva desde el picker): solo el
+mensaje inmediatamente siguiente va a la sesión elegida; el resto vuelve a la sesión activa.
+El destino caduca solo a los `SEND_TARGET_TTL` segundos (2 min), y se descarta si mientras
+tanto se hace un reply o se usa /open, /tmp o /sessions.
 
 ### Texto libre → prompt
 

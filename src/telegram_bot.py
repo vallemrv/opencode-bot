@@ -1729,12 +1729,16 @@ async def cb_provmodel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         sid         = sess.get("id", "")
         title       = sess.get("title") or sid[:12]
         model_label = f"{pid}/{mid}" if pid and mid else (pid or "default")
-        await db.set_active(sid, cwd)
 
         # If this session was created from the /send flow
         send_new_dir = ctx.bot_data.pop("send_new_sess_dir", None)
-        
-        if send_new_dir and Path(send_new_dir).resolve() == Path(cwd).resolve():
+        from_send    = bool(send_new_dir) and Path(send_new_dir).resolve() == Path(cwd).resolve()
+
+        # /send nunca cambia la sesión activa: solo apunta el próximo mensaje a esta sesión.
+        if not from_send:
+            await db.set_active(sid, cwd)
+
+        if from_send:
             _set_send_target(ctx.bot_data, sid, cwd)
             await q.edit_message_text(
                 f"✅ Sesión creada\n"
@@ -2979,7 +2983,9 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             _untracked_reply = True
 
     if _reply_target:
-        # Reply always bypasses send_target
+        # Un reply manda siempre a la sesión que escribió ese mensaje, y descarta
+        # un /send pendiente (si no, secuestraría el mensaje siguiente).
+        _clear_send_mode(ctx.bot_data)
         sid       = _reply_target["session_id"]
         directory = _reply_target["directory"]
     else:
@@ -3019,11 +3025,12 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             q = queues.setdefault(sid, deque())
             q.append({"text": text, "directory": directory})
             pos = len(q)
-            await update.message.reply_text(
+            queued_msg = await update.message.reply_text(
                 f"⏳ `{cwd_name}` ocupado. Mensaje encolado (posición {pos}).\n"
                 f"Se enviará cuando OpenCode termine la tarea actual.",
                 parse_mode="Markdown",
             )
+            _track_msg(ctx.application, queued_msg.message_id, sid, directory)
             return
 
     if not await _server_ok(update.message.reply_text):
@@ -3500,7 +3507,7 @@ async def cmd_send(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     btns.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancel:")])
 
     await update.message.reply_text(
-        f"📤 *Elige destino*\n\n¿A qué proyecto?",
+        "📤 *Elige destino*\n\n¿A qué proyecto?",
         reply_markup=InlineKeyboardMarkup(btns),
         parse_mode="Markdown",
     )
@@ -3693,19 +3700,6 @@ def _clear_send_mode(bot_data: dict) -> bool:
     return was_active
 
 
-@admin_only
-async def cmd_endsend(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Cancel pending /send target."""
-    was_active = _clear_send_mode(ctx.bot_data)
-    if was_active:
-        await update.message.reply_text(
-            "📤 Envío pendiente cancelado.",
-            parse_mode="Markdown",
-        )
-    else:
-        await update.message.reply_text("⚠️ No hay ningún envío pendiente.")
-
-
 # ---------------------------------------------------------------------------
 # /start
 # ---------------------------------------------------------------------------
@@ -3745,7 +3739,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"*Comandos*\n"
             f"/open — abrir proyecto o cambiar sesión\n"
             f"/send — enviar prompt a otro proyecto (un solo tiro)\n"
-            f"/endsend — cancelar un /send pendiente de escribir\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
@@ -3764,7 +3757,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"*Comandos*\n"
             f"/open — navega carpetas, elige proyecto y modelo, crea sesión\n"
             f"/send — enviar prompt a otro proyecto (un solo tiro)\n"
-            f"/endsend — cancelar un /send pendiente de escribir\n"
             f"/sessions — gestionar sesiones (todas o por proyecto)\n"
             f"/models — ver y cambiar modelos disponibles\n"
             f"/close — borrar todas las sesiones de un proyecto\n"
@@ -3793,7 +3785,6 @@ def main():
     app.add_handler(CommandHandler("esc",      cmd_esc))
     app.add_handler(CommandHandler(["resumen", "compact"], cmd_resumen))
     app.add_handler(CommandHandler("send",     cmd_send))
-    app.add_handler(CommandHandler("endsend",  cmd_endsend))
     app.add_handler(CommandHandler("restart",  cmd_restart))
     app.add_handler(CommandHandler("git",      cmd_git))
     app.add_handler(CommandHandler("tree",     cmd_tree))
@@ -3872,7 +3863,6 @@ def main():
             BotCommand("tmp",      "Abrir sesión de trabajo temporal"),
             BotCommand("sessions", "Gestionar sesiones de cualquier proyecto"),
             BotCommand("send",     "Enviar prompt a otro proyecto (un solo tiro)"),
-            BotCommand("endsend",  "Cancelar un /send pendiente de escribir"),
             BotCommand("close",    "Cerrar proyecto"),
             BotCommand("models",   "Cambiar modelo de cualquier sesión"),
             BotCommand("effort",   "Esfuerzo de razonamiento de la sesión activa"),
