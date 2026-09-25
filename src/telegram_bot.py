@@ -30,6 +30,7 @@ from telegram.error import BadRequest, RetryAfter
 
 import shutil
 import db
+from upload_batch import UploadBatcher, UPLOAD_DELAY, upload_path
 import transcription as grok_stt
 import md2tgv2
 from opencode_client import OpenCodeClient
@@ -2745,49 +2746,66 @@ async def cmd_resumen(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
-# File upload → save to active session cwd
+# File uploads → temporary storage and debounced session prompt
 # ---------------------------------------------------------------------------
 
 TMP_DIR = Path("/tmp/opencode-bot-media")
 
 @admin_only
 async def handle_file_upload(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Handle documents, photos, videos — save to tmp dir, not the project (avoids clutter)."""
     msg = update.message
-    file_id: str | None = None
-    file_name: str | None = None
-
+    file_id = file_name = None
     if msg.document:
-        file_id   = msg.document.file_id
-        file_name = msg.document.file_name or f"document_{int(time.time())}"
+        file_id, file_name = msg.document.file_id, msg.document.file_name or "documento"
     elif msg.photo:
-        file_id   = msg.photo[-1].file_id
-        file_name = f"photo_{int(time.time())}.jpg"
+        file_id, file_name = msg.photo[-1].file_id, "photo.jpg"
     elif msg.video:
-        file_id   = msg.video.file_id
-        file_name = msg.video.file_name or f"video_{int(time.time())}.mp4"
-
+        file_id, file_name = msg.video.file_id, msg.video.file_name or "video.mp4"
     if not file_id:
-        await msg.reply_text("❌ Tipo de archivo no soportado.")
         return
+    active = await db.get_active()
+    if not active:
+        await msg.reply_text("❌ No hay sesión activa. Usa /open.")
+        return
+    directory = active["directory"]
+    sid = active["session_id"]
+    key = (msg.chat_id, directory, sid)
 
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
-    save_path = TMP_DIR / file_name
+    async def deliver(text):
+        try:
+            await _dispatch_prompt(update, ctx, sid, directory, text)
+        except Exception:
+            logger.exception("Failed to dispatch uploaded files")
+            await msg.reply_text(
+                "❌ No se pudo avisar a la sesión. Los archivos siguen guardados "
+                "en las rutas indicadas; puedes enviárselas de nuevo.")
 
+    batcher = ctx.bot_data.get("upload_batcher")
+    if batcher is None:
+        batcher = ctx.bot_data["upload_batcher"] = UploadBatcher(ctx.application.create_task)
+    # Stop the previous timer before awaiting the download, even for large files.
+    batch = batcher.begin(key, deliver)
+    save_path = None
+    downloaded = False
     try:
-        tg_file = await ctx.bot.get_file(file_id)
-        await tg_file.download_to_drive(save_path)
+        save_path = upload_path(TMP_DIR, file_name)
+        tg = await ctx.bot.get_file(file_id)
+        await tg.download_to_drive(save_path)
+        downloaded = True
     except Exception as exc:
         await msg.reply_text(f"❌ Error al guardar el archivo: {exc}")
         return
+    finally:
+        batcher.finish(key, batch, save_path if downloaded else None, msg.caption or "")
+        if save_path is not None and not downloaded:
+            save_path.unlink(missing_ok=True)
+            save_path.parent.rmdir()
 
-    caption = msg.caption or ""
-    caption_note = f"\n📝 _{caption}_" if caption else ""
-    await msg.reply_text(
-        f"✅ `{file_name}` guardado en `{save_path}`\n"
-        f"Pide que lo muevan al proyecto si lo necesitas ahí.{caption_note}",
-        parse_mode="Markdown",
-    )
+    saved = await msg.reply_text(
+        f"✅ Guardado: {save_path}\n"
+        f"⏳ Avisaré a la sesión tras {UPLOAD_DELAY:g} s sin nuevas subidas, "
+        "con los archivos y sus comentarios.")
+    _track_msg(ctx.application, saved.message_id, sid, directory)
 
 
 @admin_only
@@ -3008,6 +3026,20 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 return
             sid       = target["session_id"]
             directory = target["directory"]
+    await _dispatch_prompt(update, ctx, sid, directory, text)
+
+
+async def _dispatch_prompt(update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+                           sid: str, directory: str, text: str):
+    """Serialize text and timer dispatches before checking the session status."""
+    locks = ctx.bot_data.setdefault("prompt_locks", {})
+    lock = locks.setdefault(sid, asyncio.Lock())
+    async with lock:
+        await _dispatch_prompt_locked(update, ctx, sid, directory, text)
+
+
+async def _dispatch_prompt_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+                                  sid: str, directory: str, text: str):
     cwd_name = Path(directory).name or "?"
 
     # If session is currently busy, queue the message locally and notify.

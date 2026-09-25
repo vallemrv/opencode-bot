@@ -119,3 +119,15 @@ src/
 ## Licencia
 
 MIT
+## Fotos y archivos adjuntos
+
+Las fotos, documentos y vídeos se guardan en un directorio temporal único del
+servidor. El bot envía a la sesión activa un único mensaje con la ruta local,
+la URL `file://` y el comentario de Telegram de cada archivo (si lo hay).
+Tras la última descarga espera **5 segundos**; cada nueva subida reinicia la
+espera. También agrupa álbumes y varias subidas consecutivas.
+
+El destino se fija al recibir los archivos: cambiar de sesión durante la espera
+no redirige el lote. Si la sesión está ocupada, el mensaje queda en su cola.
+Hace falta una sesión activa (`/open`). Las rutas son locales al servidor, no
+URL públicas; los archivos temporales pueden borrarse al reiniciar el equipo.
