@@ -43,3 +43,21 @@ async def interaction_directory(app, session_id, db, oc):
             return None
         current = info.get("parentID")
     return None
+
+
+def protect_log_urls():
+    """Ocultar tokens en mensajes y trazas de los registros nuevos de Telegram."""
+    import logging
+
+    class SafeFormatter(logging.Formatter):
+        def format(self, record):
+            return re.sub(
+                r"(api\.telegram\.org/bot)\d+:[A-Za-z0-9_-]+",
+                r"\1[oculto]", super().format(record),
+            )
+
+    for handler in logging.getLogger().handlers:
+        handler.setFormatter(SafeFormatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        ))
+    logging.getLogger("httpx").setLevel(logging.WARNING)

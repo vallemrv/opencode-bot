@@ -42,3 +42,31 @@ class RoutingTest(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(oc.get_session.called)
             path.unlink()
             self.assertEqual(await interaction_directory(app, "ses_valle", db, oc), "/same")
+
+
+class LogPrivacyTest(unittest.TestCase):
+    def test_oculta_tokens_incluso_en_trazas(self):
+        import io
+        import logging
+
+        from session_routing import protect_log_urls
+
+        stream = io.StringIO()
+        handler = logging.StreamHandler(stream)
+        root = logging.getLogger()
+        before = root.handlers[:]
+        client_level = logging.getLogger('httpx').level
+        root.handlers = [handler]
+        fake = '123456789:CredencialFicticiaSoloParaTest'
+        try:
+            protect_log_urls()
+            try:
+                raise ValueError('https://api.telegram.org/bot' + fake + '/sendMessage')
+            except ValueError:
+                root.exception('Fallo en la conexión')
+            self.assertNotIn(fake, stream.getvalue())
+            self.assertIn('bot[oculto]/sendMessage', stream.getvalue())
+            self.assertIn('Fallo en la conexión', stream.getvalue())
+        finally:
+            root.handlers = before
+            logging.getLogger('httpx').setLevel(client_level)

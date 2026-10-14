@@ -30,7 +30,7 @@ from telegram.error import BadRequest, RetryAfter
 
 import shutil
 import db
-from session_routing import interaction_directory
+from session_routing import interaction_directory, protect_log_urls
 from upload_batch import UploadBatcher, UPLOAD_DELAY, upload_path
 import transcription as grok_stt
 import md2tgv2
@@ -45,6 +45,7 @@ MAX_KS = 2000
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
+protect_log_urls()
 
 TOKEN     = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_ID  = int(os.environ["TELEGRAM_ADMIN_ID"])
