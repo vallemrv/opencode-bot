@@ -30,6 +30,7 @@ from telegram.error import BadRequest, RetryAfter
 
 import shutil
 import db
+from session_routing import interaction_directory
 from upload_batch import UploadBatcher, UPLOAD_DELAY, upload_path
 import transcription as grok_stt
 import md2tgv2
@@ -811,20 +812,11 @@ async def _handle_question_asked(app: Application, props: dict) -> None:
     if not req_id or not questions:
         return
 
-    # Resolve directory from statuses or active session
-    directory = ""
-    statuses  = app.bot_data.get("statuses", {})
-    st = statuses.get(session_id)
-    if st:
-        directory = st.get("directory", "")
-    if not directory:
-        active = await db.get_active()
-        if active and active.get("session_id") == session_id:
-            directory = active.get("directory", "")
-    if not directory:
-        active = await db.get_active()
-        if active:
-            directory = active.get("directory", "")
+    directory = await interaction_directory(app, session_id, db, oc)
+    if directory is None:
+        return
+    if req_id in app.bot_data.get("pending_questions", {}):
+        return  # Una reconexión SSE no debe publicar la misma pregunta dos veces.
 
     n = len(questions)
 
@@ -1185,15 +1177,9 @@ async def sse_listener(app: Application) -> None:
                 meta      = props.get("metadata", {})
                 p_sid     = props.get("sessionID", sid)
 
-                # Try to get directory from statuses or active session
-                p_dir = ""
-                p_st  = statuses.get(p_sid)
-                if p_st:
-                    p_dir = p_st.get("directory", "")
-                if not p_dir:
-                    active = await db.get_active()
-                    if active and active.get("session_id") == p_sid:
-                        p_dir = active.get("directory", "")
+                p_dir = await interaction_directory(app, p_sid, db, oc)
+                if p_dir is None:
+                    continue
 
                 pk  = _key_raw(app.bot_data, perm_id)
                 sk  = _key_raw(app.bot_data, p_sid)
@@ -1897,7 +1883,12 @@ async def _send_question_answer(app: Application, req_id: str, session_id: str, 
     """Send the collected answers to OpenCode and clean up."""
     # Get directory from pending before popping
     q_data_pre = app.bot_data.get("pending_questions", {}).get(req_id, {})
-    directory  = q_data_pre.get("directory", "")
+    if not q_data_pre or q_data_pre.get("session_id") != session_id:
+        return
+    directory = await interaction_directory(app, session_id, db, oc)
+    if directory is None:
+        app.bot_data.get("pending_questions", {}).pop(req_id, None)
+        return
     try:
         await oc.reply_question(req_id, answers, directory=directory or None)
     except Exception as exc:
@@ -2016,7 +2007,10 @@ async def cb_qreject(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     q_data    = ctx.bot_data.get("pending_questions", {}).get(req_id, {})
     session_id = q_data.get("session_id", "")
-    directory = q_data.get("directory", "")
+    directory = await interaction_directory(ctx.application, session_id, db, oc)
+    if not q_data or directory is None:
+        await q.edit_message_text("Esta pregunta ya no pertenece a una sesión de Telegram.")
+        return
 
     try:
         await oc.reject_question(req_id, directory=directory or None)
