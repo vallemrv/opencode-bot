@@ -205,6 +205,7 @@ Texto
 | `closeall:` | `cb_closeall` | Cerrar todo del server |
 | `sda:` | `cb_sda` | Set Default Active |
 | `abort:` | `cb_abort` | Cancelar tarea |
+| `qdel:` | `cb_qdel` | Eliminar un mensaje encolado (antes de enviarse) |
 | `cancel:` | `cb_cancel` | Cancelar operación UI |
 | `perm:` | `cb_perm` | Responder permiso |
 | `perminput:` | `cb_perminput` | Input personalizado para permiso |

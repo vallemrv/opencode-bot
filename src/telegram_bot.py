@@ -17,6 +17,7 @@ import os
 import asyncio
 import logging
 import time
+import uuid
 from pathlib import Path
 from collections import defaultdict, deque
 
@@ -171,7 +172,7 @@ def _format_cost(cost: float) -> str:
 #   }
 # }
 # app.bot_data["queues"] = {
-#   session_id: deque([{"text": str, "directory": str}])   # pending prompts
+#   session_id: deque([{"text": str, "directory": str, "id": str, "msg_id": int}])   # pending prompts
 # }
 # app.bot_data["msg_to_session"] = OrderedDict {
 #   message_id (int): {"session_id": str, "directory": str}
@@ -2693,6 +2694,34 @@ async def cb_abort(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text(msg)
 
 
+async def cb_qdel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Remove a pending prompt from the local queue before it gets sent."""
+    q = update.callback_query
+    await q.answer()
+    parts = q.data.split(":")
+    sk, item_id = int(parts[1]), parts[2]
+    sid = _val(ctx, sk)
+
+    queues = ctx.bot_data.get("queues", {})
+    queue = queues.get(sid)
+    if not queue:
+        await q.edit_message_text("⚠️ Este mensaje ya no está en la cola.")
+        return
+
+    for item in queue:
+        if item.get("id") == item_id:
+            queue.remove(item)
+            break
+    else:
+        await q.edit_message_text("⚠️ Este mensaje ya no está en la cola.")
+        return
+
+    if not queue:
+        queues.pop(sid, None)
+
+    await q.edit_message_text("🗑 Mensaje eliminado de la cola.")
+
+
 # ---------------------------------------------------------------------------
 # /resumen (alias /compact) — pide a OpenCode que compacte el contexto
 # ---------------------------------------------------------------------------
@@ -3050,13 +3079,20 @@ async def _dispatch_prompt_locked(update: Update, ctx: ContextTypes.DEFAULT_TYPE
         if server_busy:
             queues = ctx.bot_data.setdefault("queues", {})
             q = queues.setdefault(sid, deque())
-            q.append({"text": text, "directory": directory})
+            item_id = uuid.uuid4().hex[:8]
+            item = {"text": text, "directory": directory, "id": item_id}
+            q.append(item)
             pos = len(q)
+            sk = _key(ctx, sid)
             queued_msg = await update.message.reply_text(
                 f"⏳ `{cwd_name}` ocupado. Mensaje encolado (posición {pos}).\n"
                 f"Se enviará cuando OpenCode termine la tarea actual.",
                 parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Cancelar", callback_data=f"qdel:{sk}:{item_id}")
+                ]]),
             )
+            item["msg_id"] = queued_msg.message_id
             _track_msg(ctx.application, queued_msg.message_id, sid, directory)
             return
 
@@ -3833,6 +3869,7 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_closeall,  pattern=r"^closeall:"))
     app.add_handler(CallbackQueryHandler(cb_sda,       pattern=r"^sda:"))
     app.add_handler(CallbackQueryHandler(cb_abort,     pattern=r"^abort:"))
+    app.add_handler(CallbackQueryHandler(cb_qdel,      pattern=r"^qdel:"))
     app.add_handler(CallbackQueryHandler(cb_cancel,    pattern=r"^cancel:"))
     app.add_handler(CallbackQueryHandler(cb_perm,      pattern=r"^perm:"))
     app.add_handler(CallbackQueryHandler(cb_perminput, pattern=r"^perminput:"))
